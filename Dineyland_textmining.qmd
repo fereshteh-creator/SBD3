@@ -1,0 +1,72 @@
+---
+title: "Text_Mining"
+author: "Fereshteh Ahmadi, Seraina Felicitas Zimmermann, Michael Etter, Donjet Dzemaili"
+format:
+  html:
+    df-print: paged
+    toc: true
+    code-tools: true
+
+editor: visual
+---
+
+# Review Analysis for Disneyland
+
+## part 1: Content analysis
+
+🔷 What can we tell about the customers that write reviews?
+
+### Libraries
+
+```{r}
+#| label: load_packages
+#| message: false
+#| warning: false
+#| code-fold: true
+
+library(tidyverse)            # Core data wrangling and visualization packages (dplyr, ggplot2, etc.)
+library(quanteda)             # Text tokenization, preprocessing, and creating document-feature matrices
+library(stopwords)            # Provides multilingual stopword lists for text cleaning
+library(topicmodels)          # Topic modeling algorithms like LDA and CTM (Latent Dirichlet Allocation)
+library(tidytext)             # Tidy-friendly tools for text mining and sentiment analysis
+library(quanteda.textplots)   # Visualization tools for quanteda objects (word clouds, networks, etc.)
+library(ggplot2)              # Grammar of graphics plotting system (used by tidyverse)
+library(scales)               # Formatting and scaling functions for plots (e.g., percentages, dates)
+library(devtools)             # Tools to install and manage R packages from GitHub
+library(plotly)               # Interactive plots (works well with ggplot2 for interactivity)
+library(readr)                # Efficient functions to read data (like CSVs) — part of tidyverse
+library(ldatuning)            # Helps choose optimal number of topics in LDA models
+library(bertopic)             # (If installed) R wrapper or interface to the Python BERTopic library
+library(htmltools)            # Used in HTML report rendering and interactive outputs (like word clouds)
+library(umap)                 # Uniform Manifold Approximation and Projection (UMAP) for dimensionality reduction
+
+options(scipen=999)
+
+```
+
+### Data
+
+```{r}
+load('Disneyland.rda')
+head(reviews)
+```
+
+## Part 2: Sentiment analysis
+
+🔷 What do the visitors talk about in their reviews and how does it relate sentiment/ratings?
+
+```{r}
+
+```
+
+## Part 3: Locations analysis
+
+🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
+
+```{r}
+
+```
+
+## Part 4: Conclusion and Discussion
+
+🔷 What specific advice can we give to the Park management based on our analysis? How can we integrate the analysis of reviews in internal processes, can we think of any data products that would be of value?
