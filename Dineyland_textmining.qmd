@@ -12,11 +12,24 @@ editor: visual
 
 # Review Analysis for Disneyland
 
-## part 1: Content analysis
+## Part 0: Prepossessing
 
-🔷 What can we tell about the customers that write reviews?
+### Environment and Setting
+
+Please set your own virtual environment if needed
+
+```{r}
+#| label: choose_environment
+
+
+reticulate::use_condaenv("huggingfaceR", required = TRUE)
+set.seed(19)
+
+```
 
 ### Libraries
+
+Most of these are just libraries used by Lucia in her quarto docs, if not needed remove
 
 ```{r}
 #| label: load_packages
@@ -39,8 +52,16 @@ library(ldatuning)            # Helps choose optimal number of topics in LDA mod
 library(bertopic)             # (If installed) R wrapper or interface to the Python BERTopic library
 library(htmltools)            # Used in HTML report rendering and interactive outputs (like word clouds)
 library(umap)                 # Uniform Manifold Approximation and Projection (UMAP) for dimensionality reduction
+library(reticulate)
+
+if (!require("cld2")) install.packages("cld2")
+if (!require("hunspell")) install.packages("hunspell")
+library(cld2) # for language detection
+library(hunspell) # for spelling correction
 
 options(scipen=999)
+
+
 
 ```
 
@@ -49,15 +70,410 @@ options(scipen=999)
 ```{r}
 load('Disneyland.rda')
 head(reviews)
+
+
 ```
+
+### Data tidying
+A bit of cleaning...
+```{r}
+
+# Load stopwords
+data("stop_words")
+
+# remove symbols 
+reviews_clean <- reviews %>%
+  filter(!is.na(Review_Text)) %>%
+  mutate(Review_ID,
+         Review_Text = Review_Text %>%
+           str_to_lower() %>%
+           str_replace_all("http\\S+|www\\S+", "") %>%
+           str_replace_all("<.*?>", "") %>%
+           str_replace_all("[^a-z\\s]", " ") %>%
+           str_squish()) 
+
+custom_stops <- tibble(
+  word = c("disney", "disneyland", "paris", "hong", "kong", "california", "ride", "rides", "park", "parks", "day")
+)
+all_stopwords <- bind_rows(stop_words, custom_stops)
+
+# Step 2: Tokenize and remove stopwords
+tokens <- reviews_clean %>%
+  unnest_tokens(word, Review_Text) %>%
+  anti_join(all_stopwords, by = "word")
+
+# Step 3: Rebuild cleaned text from tokens and join back to full data
+reconstructed <- tokens %>%
+  group_by(Review_ID) %>%
+  summarise(Review_Text_clean = str_c(word, collapse = " "), .groups = "drop")
+
+# Step 4: Join back to original metadata
+reviews_clean <- reviews_clean %>%
+  left_join(reconstructed, by = "Review_ID")
+
+```
+
+
+-   **Multilingual Reviews:**
+
+First we check and see if other languages are involved.
+
+```{r}
+
+# Detect language of each review
+reviews$language <- detect_language(reviews$Review_Text)
+
+# See if there are other languages in the data
+reviews[reviews$language!= "en", ]
+
+
+```
+Since its difficult to fully recognize other languages we will use multilingual models.
+
+
+-   **Fake or Sponsored Reviews:**
+
+We also check and remove very short, identical and copy pasted reviews
+```{r}
+# very short reviews seem to be mostly 5 star ratings
+reviews_clean %>% 
+  mutate(word_count = str_count(Review_Text, "\\w+")) %>%
+  arrange(word_count) %>%
+  select(Rating, Review_Text, word_count) %>% 
+  filter(word_count<10)
+
+reviews_clean<-reviews_clean %>% 
+  mutate(word_count = str_count(Review_Text, "\\w+")) %>%
+  filter(word_count>10) %>% 
+  group_by(Review_Text_clean) %>% 
+    mutate(duplicate_count = n()) %>%
+    ungroup() %>% 
+    filter(duplicate_count == 1)
+
+
+    
+```
+
+-   **Spelling Mistakes:**\
+
+To solve this problem we mainly use NLPs.
+
+
+
+## part 1: Content analysis and topic modeling
+
+🔷 What can we tell about the customers that write reviews?
+
+```{r}
+# most of the customers write shorter reviews
+reviews %>%
+  mutate(length = nchar(Review_Text)) %>%
+  ggplot(aes(x = length)) +
+  geom_histogram(binwidth = 20)
+
+```
+
+
+Most of the reviews are for California and mostly from 2015-2017
+```{r} 
+
+# Extract year
+reviews$year <- year(reviews$Year)
+
+# Plot: Reviews by year and branch
+reviews %>%
+  count(year, Branch) %>%
+  ggplot(aes(x = year, y = n, fill = Branch)) +
+  geom_col(position = "dodge") +
+  labs(title = "Review Counts by Year and Branch",
+       x = "Year", y = "Number of Reviews") +
+  theme_minimal()
+
+```
+seems like peek visits in California are in July, in Paris August and in HongKong December
+```{r}
+# Extract month (abbreviated names for labels)
+reviews$month <- month(reviews$Year_Month, label = TRUE, abbr = TRUE)
+
+# Plot: Reviews by month and branch
+reviews %>%
+  count(month, Branch) %>%
+  ggplot(aes(x = month, y = n, fill = Branch)) +
+  geom_col(position = "dodge") +
+  labs(title = "Review Counts by Month and Branch",
+       x = "Month", y = "Number of Reviews") +
+  theme_minimal()
+
+```
+Seems like california has the lowest ratio of tourists who left a comment. 
+```{r}
+branch_country <- tibble::tibble(
+  Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
+  Country = c("United States", "France", "Hong Kong")
+)
+
+# Join to get park country
+reviews_tagged <- reviews_clean %>%
+  left_join(branch_country, by = "Branch") %>%
+  mutate(Visitor_Type = if_else(Reviewer_Location == Country, "Local", "Tourist"))
+
+reviews_tagged %>%
+  count(Branch, Visitor_Type) %>%
+  tidyr::pivot_wider(names_from = Visitor_Type, values_from = n, values_fill = 0) %>%
+  mutate(Total = Tourist + Local,
+         Tourist_Ratio = Tourist / Total)
+
+```
+
+
 
 ## Part 2: Sentiment analysis
 
 🔷 What do the visitors talk about in their reviews and how does it relate sentiment/ratings?
 
+
+```{r}
+set.seed(9) 
+
+# Shuffle and sample the data
+sampled_reviews <- reviews_tagged %>%
+  filter(!is.na(Review_Text_clean)) %>%
+  slice_sample(n = 10000) %>% 
+  mutate(Review_Text_clean = str_trunc(Review_Text_clean, 450))  # about 512 tokens after tokenization
+
+# Load Python's transformers package
+transformers <- import("transformers")
+
+# Load sentiment analysis pipeline
+sentiment_model <- transformers$pipeline(
+  task = "text-classification",
+  model = "nlptown/bert-base-multilingual-uncased-sentiment"
+)
+
+
+# Enable tokenizer parallelism 
+Sys.setenv(TOKENIZERS_PARALLELISM = "true")
+
+emo_results <- sampled_reviews %>%
+  mutate(
+    sentiment = map(Review_Text_clean, safely(sentiment_model))
+  ) %>%
+  mutate(
+    sentiment_result = map(sentiment, ~ .x$result[[1]]),
+    stars = map_dbl(sentiment_result, ~ as.numeric(str_extract(.x$label, "\\d"))),
+    label = case_when(
+      stars <= 2 ~ "NEGATIVE",
+      stars == 3 ~ "NEUTRAL",
+      stars >= 4 ~ "POSITIVE"
+    )
+  )
+
+# Disable parallelism again     
+Sys.setenv(TOKENIZERS_PARALLELISM = "false")
+
+
+ 
+```
+ratings dont seem so good for paris
 ```{r}
 
+emo_results %>%
+  group_by(Branch) %>%
+  summarise(avg_sentiment = mean(Rating, na.rm = TRUE))
+
 ```
+
+Paris has many negative reviews why?
+```{r}
+
+sentiment_by_visitor <- emo_results %>%
+  group_by(Branch, Visitor_Type, label) %>%
+  summarise(count = n(), .groups = "drop")
+
+
+sentiment_normalized <- sentiment_by_visitor %>%
+  group_by(Branch, Visitor_Type) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+
+ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~Branch) +
+  labs(
+    title = "Sentiment (%) by Visitor Type and Branch",
+    x = "Visitor Type",
+    y = "Percentage of Reviews",
+    fill = "Sentiment"
+  ) +
+  theme_minimal()
+
+
+
+```
+Look at words or maybe cloud of words
+```{r}
+
+#| label: wordcloud
+
+custom_stopwords <- c("disneyland", "disney", "park", "day")
+
+# disneyland Paris
+paris_tokens <- emo_results %>%
+  filter(Branch == "Disneyland_Paris", label=="NEGATIVE", !is.na(Review_Text_clean)) %>%
+  pull(Review_Text_clean) %>%
+  tokens(
+    remove_punct = TRUE,
+    remove_numbers = TRUE,
+    remove_symbols = TRUE
+  ) %>%
+  tokens_tolower() %>%
+  tokens_remove(pattern = custom_stopwords)
+
+
+paris_dfm <- dfm(paris_tokens)
+paris_dfm <- paris_dfm[ntoken(paris_dfm) > 0, ]
+
+textplot_wordcloud(
+  paris_dfm,
+  min_count = 10,
+  max_words = 100,
+  color = "darkblue",
+  min_size = 0.5,
+  max_size = 4
+)
+
+
+```
+Lets use bertopic to find out what they are talking about
+```{r}
+# Load Python modules
+bert <- import("bertopic")
+sentence_transformers <- import("sentence_transformers")
+
+# Embedding model (multilingual)
+embedding_model <- sentence_transformers$SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+
+topic_model <- bert$BERTopic(
+  embedding_model = embedding_model,
+  nr_topics = r_to_py(6L),
+  calculate_probabilities = TRUE,
+  verbose = TRUE
+)
+
+docs <- emo_results %>%
+  filter(Branch == "Disneyland_Paris", label == "NEGATIVE", !is.na(Review_Text_clean)) %>%
+  slice_sample(n = 1000) %>%
+  pull(Review_Text_clean)
+
+# Fit model (run this in console, not inside Rmd chunk) it works for me though
+topic_results <- topic_model$fit_transform(docs)
+
+# Get summary of topics
+topic_model$get_topic_info()
+
+
+
+
+
+
+   
+```
+
+Lets visulize
+```{r}
+
+topic_info <- topic_model$get_topic_info()
+topic_info_df <- py_to_r(topic_info)
+
+
+
+
+topic_info_df %>%
+  filter(Topic!=-1) %>% 
+  ggplot(aes(x = reorder(Name, Count), y = Count, fill = Name)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Frequency of Topics in Negative Disneyland Paris Reviews",
+       x = "Theme", y = "Number of Reviews") +
+  theme_minimal() +
+  coord_flip()
+
+
+```
+```{r}
+
+embeddings <- as.data.frame(py_to_r(topic_model$umap_model$embedding_)) 
+
+colnames(embeddings) <- c("UMAP1", "UMAP2")
+topics <- reticulate::py_to_r(topic_results[[1]])
+embeddings$topics <- as.factor(topics)
+# Remove NA-named columns
+embeddings <- embeddings[, !is.na(names(embeddings)) & names(embeddings) != ""]
+
+# Now safe to filter
+embeddings <- embeddings %>% filter(topics != -1)
+
+
+# trimming of outliers
+ggplotly(
+  ggplot(embeddings) +
+    geom_point(aes(UMAP1, UMAP2, color = topics)) +
+    theme_classic()
+)
+
+
+```
+
+
+now lets do the same thing for California positive since they have the most positive reviews in our sample. 
+
+```{r}
+
+
+# Filter out text that appears more than once
+emo_results <- emo_results %>%
+  filter(duplicate_count == 1)
+
+reviews_california_pos <- emo_results %>%
+  filter(Branch == "Disneyland_California", label == "POSITIVE",  !is.na(Review_Text_clean)) %>%
+  pull(Review_Text_clean)
+
+reviews_california_pos <- reviews_california_pos %>%
+  str_squish() %>%
+  str_trunc(300)  # if input is long
+
+# Use same embedding model as before
+topic_model_california <- bert$BERTopic(
+  embedding_model = embedding_model,
+  min_topic_size = 30L,
+  calculate_probabilities = TRUE,
+  verbose = TRUE
+)
+
+topic_results_california <-topic_model_california$fit_transform(reviews_california_pos)
+topic_model_california$get_topic_info()
+
+topic_info_2 <- topic_model_california$get_topic_info()
+topic_info_df_2 <- py_to_r(topic_info_2)
+
+
+
+
+topic_info_df_2 %>%
+  filter(Count >20, Topic!=-1) %>% 
+  ggplot(aes(x = reorder(Name, Count), y = Count, fill = Name)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Frequency of Topics in positive California Reviews",
+       x = "Theme", y = "Number of Reviews") +
+  theme_minimal() +
+  coord_flip()
+
+
+
+
+```
+
+based on these insights, paris could work on negative topics and offer more fastpass, shows and events like firework, special attractions, friendlier staff and cleaner toilets.
 
 ## Part 3: Locations analysis
 
