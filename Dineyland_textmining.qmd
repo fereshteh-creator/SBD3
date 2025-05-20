@@ -75,7 +75,9 @@ head(reviews)
 ```
 
 ### Data tidying
+
 A bit of cleaning...
+
 ```{r}
 
 # Load stopwords
@@ -113,7 +115,6 @@ reviews_clean <- reviews_clean %>%
 
 ```
 
-
 -   **Multilingual Reviews:**
 
 First we check and see if other languages are involved.
@@ -128,12 +129,13 @@ reviews[reviews$language!= "en", ]
 
 
 ```
-Since its difficult to fully recognize other languages we will use multilingual models.
 
+Since its difficult to fully recognize other languages we will use multilingual models.
 
 -   **Fake or Sponsored Reviews:**
 
 We also check and remove very short, identical and copy pasted reviews
+
 ```{r}
 # very short reviews seem to be mostly 5 star ratings
 reviews_clean %>% 
@@ -158,8 +160,6 @@ reviews_clean<-reviews_clean %>%
 
 To solve this problem we mainly use NLPs.
 
-
-
 ## part 1: Content analysis and topic modeling
 
 🔷 What can we tell about the customers that write reviews?
@@ -173,9 +173,9 @@ reviews %>%
 
 ```
 
-
 Most of the reviews are for California and mostly from 2015-2017
-```{r} 
+
+```{r}
 
 # Extract year
 reviews$year <- year(reviews$Year)
@@ -190,7 +190,9 @@ reviews %>%
   theme_minimal()
 
 ```
+
 seems like peek visits in California are in July, in Paris August and in HongKong December
+
 ```{r}
 # Extract month (abbreviated names for labels)
 reviews$month <- month(reviews$Year_Month, label = TRUE, abbr = TRUE)
@@ -205,7 +207,9 @@ reviews %>%
   theme_minimal()
 
 ```
-Seems like california has the lowest ratio of tourists who left a comment. 
+
+Seems like california has the lowest ratio of tourists who left a comment.
+
 ```{r}
 branch_country <- tibble::tibble(
   Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
@@ -225,12 +229,9 @@ reviews_tagged %>%
 
 ```
 
-
-
 ## Part 2: Sentiment analysis
 
 🔷 What do the visitors talk about in their reviews and how does it relate sentiment/ratings?
-
 
 ```{r}
 set.seed(9) 
@@ -274,7 +275,9 @@ Sys.setenv(TOKENIZERS_PARALLELISM = "false")
 
  
 ```
+
 ratings dont seem so good for paris
+
 ```{r}
 
 emo_results %>%
@@ -284,6 +287,7 @@ emo_results %>%
 ```
 
 Paris has many negative reviews why?
+
 ```{r}
 
 sentiment_by_visitor <- emo_results %>%
@@ -311,7 +315,9 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 
 ```
+
 Look at words or maybe cloud of words
+
 ```{r}
 
 #| label: wordcloud
@@ -345,7 +351,9 @@ textplot_wordcloud(
 
 
 ```
+
 Lets use bertopic to find out what they are talking about
+
 ```{r}
 # Load Python modules
 bert <- import("bertopic")
@@ -381,6 +389,7 @@ topic_model$get_topic_info()
 ```
 
 Lets visulize
+
 ```{r}
 
 topic_info <- topic_model$get_topic_info()
@@ -400,6 +409,7 @@ topic_info_df %>%
 
 
 ```
+
 ```{r}
 
 embeddings <- as.data.frame(py_to_r(topic_model$umap_model$embedding_)) 
@@ -424,8 +434,7 @@ ggplotly(
 
 ```
 
-
-now lets do the same thing for California positive since they have the most positive reviews in our sample. 
+now lets do the same thing for California positive since they have the most positive reviews in our sample.
 
 ```{r}
 
@@ -480,6 +489,111 @@ based on these insights, paris could work on negative topics and offer more fast
 🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
 
 ```{r}
+reviews <- reviews %>%
+  mutate(
+    Year_Month = as_date(Year_Month),
+    month = month(Year_Month, label = TRUE, abbr = TRUE),
+    year = year(Year_Month)
+  )
+
+monthly_reviews <- reviews %>%
+  filter(!is.na(month) & !is.na(year)) %>%
+  count(year, month, Branch)
+
+# Sort month correctly as a factor
+monthly_reviews$month <- factor(monthly_reviews$month, 
+                                 levels = month.abb, 
+                                 ordered = TRUE)
+
+# Line plot
+ggplot(monthly_reviews, aes(x = month, y = n, color = as.factor(year), group = year)) +
+  geom_line() +
+  facet_wrap(~ Branch, scales = "free_y") +
+  labs(title = "Monthly Review Trends per Year and Branch",
+       x = "Month", y = "Number of Reviews", color = "Year") +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+# Sentiment-Lexikon
+bing_sentiments <- get_sentiments("bing")
+
+# Mit Sentiment verknüpfen
+sentiment_scores <- reviews %>%
+  cross_join(bing_sentiments) %>%
+  count(word, sentiment, sort = TRUE)
+
+# Visualisieren
+sentiment_scores %>%
+  group_by(sentiment) %>%
+  top_n(10, n) %>%
+  ungroup() %>%
+  ggplot(aes(reorder(word, n), n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  coord_flip() +
+  labs(title = "Top sentiment words in Disneyland reviews", x = NULL, y = "Anzahl")
+
+```
+
+```{r}
+
+library(tidyverse)
+library(tidytext)
+library(textclean)
+library(wordcloud)
+library(RColorBrewer)
+
+# 🧹 1. Text vorbereiten: Rezensionstext in Kleinbuchstaben & Sonderzeichen bereinigen
+# Annahme: Die Spalte mit Rezensionen heißt 'text'
+reviews_tokens <- reviews %>%
+  mutate(text = replace_non_ascii(text)) %>%          # ersetzt komische Zeichen
+  unnest_tokens(word, text) %>%                       # zerlegt Text in einzelne Wörter
+  anti_join(stop_words)                               # entfernt häufige "Füllwörter"
+
+# 📊 2. Wortfrequenz zählen
+word_freq <- reviews_tokens %>%
+  count(word, sort = TRUE)
+
+# ☁️ 3. Wordcloud erzeugen
+wordcloud(words = word_freq$word,
+          freq = word_freq$n,
+          min.freq = 20,                # nur Wörter mit mindestens 20 Vorkommen
+          max.words = 100,              # max. Anzahl anzuzeigender Wörter
+          random.order = FALSE,         # häufigste Wörter zentral platzieren
+          colors = brewer.pal(8, "Dark2"))
+
+
+```
+
+```{r}
+# Durchschnittliche Bewertung je Standort
+reviews %>%
+  group_by(Branch) %>%
+  summarise(avg_rating = mean(Rating, na.rm = TRUE), n = n()) %>%
+  arrange(desc(avg_rating)) %>%
+  ggplot(aes(x = reorder(Branch, avg_rating), y = avg_rating, fill = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Durchschnittliche Bewertung je Disneyland-Standort", x = "Standort", y = "Durchschnittsbewertung")
+
+```
+
+```{r}
+monthly_sentiment <- reviews %>%
+  cross_join(bing_sentiments) %>%
+  count(year, month, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment_score = positive - negative)
+
+ggplot(monthly_sentiment, aes(x = interaction(year, month), y = sentiment_score)) +
+  geom_line(group = 1) +
+  theme_minimal() +
+  labs(title = "Sentiment-Score über Zeit", x = "Monat", y = "Score (Positiv - Negativ)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ```
 
