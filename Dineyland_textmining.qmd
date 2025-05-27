@@ -29,8 +29,6 @@ set.seed(19)
 
 ### Libraries
 
-Most of these are just libraries used by Lucia in her quarto docs, if not needed remove
-
 ```{r}
 #| label: load_packages
 #| message: false
@@ -67,16 +65,44 @@ options(scipen=999)
 
 ### Data
 
+This dataset contains user-generated reviews for Disneyland parks in Hong Kong, California, and Paris. It captures various attributes of each review, enabling analysis of visitor feedback across locations and over time. The dataset includes the following columns:
+
+-   review_id: A unique identifier assigned to each review.
+
+-   Rating: A numerical score provided by the reviewer, indicating their overall satisfaction.
+
+-   Year_Month: The year and month when the review was posted.
+
+-   Reviewer Location: The geographical location of the reviewer, as stated in their profile.
+
+-   Year: The year when the review was written, extracted from the Year_Month field.
+
+-   Review Text: The full text of the review, expressing the reviewer's experience and opinions.
+
+-   Language: The language in which the review was written.
+
 ```{r}
 load('Disneyland.rda')
 head(reviews)
-
-
 ```
 
 ### Data tidying
 
-A bit of cleaning...
+To prepare the Disneyland review data for text analysis, a series of text preprocessing steps were performed to clean and standardize the review content. The goal of this process is to remove irrelevant information, reduce noise, and create a clean corpus suitable for natural language processing (NLP) tasks such as sentiment analysis, keyword extraction, or topic modeling.
+
+1.  Stopword Loading: Common English stopwords were imported using the `tidytext` package.
+
+2.  Text Cleaning: All reviews were converted to lowercase, and unwanted elements like URLs, HTML tags, punctuation, numbers, and extra spaces were removed. Reviews with missing text were excluded.
+
+3.  Custom Stopwords: A custom list of frequently repeated and non-informative words—such as "disney", "ride", "park", and location names—was added to the stopword list.
+
+4.  Tokenization and Filtering: Reviews were split into individual words (tokens), and all standard and custom stopwords were removed.
+
+5.  Reconstruction: The remaining tokens were reassembled into cleaned review texts for each review ID.
+
+6.  Merging: The cleaned text was merged back with the original dataset, preserving all metadata.
+
+This process ensures that only the most meaningful and relevant words remain, improving the quality and accuracy of downstream text analysis.
 
 ```{r}
 
@@ -99,17 +125,17 @@ custom_stops <- tibble(
 )
 all_stopwords <- bind_rows(stop_words, custom_stops)
 
-# Step 2: Tokenize and remove stopwords
+# Tokenize and remove stopwords
 tokens <- reviews_clean %>%
   unnest_tokens(word, Review_Text) %>%
   anti_join(all_stopwords, by = "word")
 
-# Step 3: Rebuild cleaned text from tokens and join back to full data
+# Rebuild cleaned text from tokens and join back to full data
 reconstructed <- tokens %>%
   group_by(Review_ID) %>%
   summarise(Review_Text_clean = str_c(word, collapse = " "), .groups = "drop")
 
-# Step 4: Join back to original metadata
+# Join back to original metadata
 reviews_clean <- reviews_clean %>%
   left_join(reconstructed, by = "Review_ID")
 
@@ -117,7 +143,13 @@ reviews_clean <- reviews_clean %>%
 
 -   **Multilingual Reviews:**
 
-First we check and see if other languages are involved.
+Before performing text analysis, we first checked whether the reviews were written in multiple languages. Using a language detection function, the language of each review was identified based on its text content:
+
+-   The `detect_language()` function was applied to the `Review_Text` column to assign a detected language code (e.g., "en" for English) to each review.
+
+-   A filter was then applied to identify any reviews not written in English.
+
+This step ensures that only English-language reviews are included in the analysis, avoiding noise or misinterpretation caused by multilingual content. Since its difficult to fully recognize other languages we will use multilingual models.
 
 ```{r}
 
@@ -130,11 +162,17 @@ reviews[reviews$language!= "en", ]
 
 ```
 
-Since its difficult to fully recognize other languages we will use multilingual models.
-
 -   **Fake or Sponsored Reviews:**
 
-We also check and remove very short, identical and copy pasted reviews
+To improve data quality and reduce the influence of spam or low-effort content, we implemented checks to identify and remove potentially fake or sponsored reviews. The filtering process involved two key steps:
+
+1.   Short Review Removal:\
+    Very short reviews (fewer than 10 words) were identified and excluded. These were predominantly 5-star ratings with minimal content, often lacking meaningful information for analysis.
+
+2.  Duplicate Review Removal:\
+    Reviews with identical cleaned text (`Review_Text_clean`) were flagged as duplicates, likely indicating copy-pasted or spammed content. Only unique reviews were retained by removing entries that appeared more than once.
+
+This step helps ensure that the final dataset is composed of authentic, original, and content-rich reviews, enhancing the reliability of subsequent text analyses.
 
 ```{r}
 # very short reviews seem to be mostly 5 star ratings
@@ -159,6 +197,8 @@ reviews_clean<-reviews_clean %>%
 -   **Spelling Mistakes:**\
 
 To solve this problem we mainly use NLPs.
+
+--\> sie hat was darüber gesagt aber weisss es nicht mehr. Müssen wir das noch machen?
 
 ## part 1: Content analysis and topic modeling
 
@@ -516,16 +556,42 @@ ggplot(monthly_reviews, aes(x = month, y = n, color = as.factor(year), group = y
 ```
 
 ```{r}
-# Average ratinge 
+# Durchschnittliches Rating pro Jahr (und ggf. pro Standort)
 reviews %>%
-  group_by(Branch) %>%
-  summarise(avg_rating = mean(Rating, na.rm = TRUE), n = n()) %>%
-  arrange(desc(avg_rating)) %>%
-  ggplot(aes(x = reorder(Branch, avg_rating), y = avg_rating, fill = n)) +
-  geom_col() +
-  coord_flip() +
-  labs(title = "Average rating per Disneyland location", x = "Location", y = "Average rating")
+  group_by(Year, Branch) %>%
+  summarise(avg_rating = mean(Rating, na.rm = TRUE)) %>%
+  ggplot(aes(x = Year, y = avg_rating, color = Branch)) +
+  geom_line(size = 1.2) +
+  labs(title = "Average Rating Over the Years by Location",
+       x = "Year",
+       y = "Average Rating") +
+  theme_minimal()
 
+
+```
+
+Sentimental
+
+```{r}
+sentiment_by_year <- emo_results %>%
+  group_by(Branch, Year, label) %>%
+  summarise(count = n(), .groups = "drop")
+
+sentiment_normalized_yearly <- sentiment_by_year %>%
+  group_by(Branch, Year) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+ggplot(sentiment_normalized_yearly, aes(x = Year, y = percent, color = label)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~Branch) +
+  labs(
+    title = "Sentiment Trend Over the Years by Branch",
+    x = "Year",
+    y = "Percentage of Reviews",
+    color = "Sentiment"
+  ) +
+  theme_minimal()
 ```
 
 Visitor or Tourist:
