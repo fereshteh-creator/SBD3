@@ -528,6 +528,50 @@ reviews %>%
 
 ```
 
+Visitor or Tourist:
+
+```{r}
+# Branch-country mapping
+branch_country <- tibble::tibble(
+  Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
+  Country = c("United States", "France", "Hong Kong")
+)
+
+# Join and classify visitor type
+reviews_tagged <- reviews_clean %>%
+  left_join(branch_country, by = "Branch") %>%
+  mutate(Visitor_Type = if_else(Reviewer_Location == Country, "Local", "Tourist"))
+
+# Summarize and reshape data
+summary_data <- reviews_tagged %>%
+  count(Branch, Visitor_Type) %>%
+  pivot_wider(names_from = Visitor_Type, values_from = n, values_fill = 0) %>%
+  mutate(
+    Total = Tourist + Local,
+    Tourist_Ratio = Tourist / Total
+  )
+
+# Reshape for plotting
+plot_data <- summary_data %>%
+  pivot_longer(cols = c("Local", "Tourist"), names_to = "Visitor_Type", values_to = "Count")
+
+# Plot
+ggplot(plot_data, aes(x = Branch, y = Count, fill = Visitor_Type)) +
+  geom_bar(stat = "identity") +
+  geom_text(
+    data = summary_data,
+    aes(x = Branch, y = Total + 10, label = scales::percent(Tourist_Ratio, accuracy = 1)),
+    inherit.aes = FALSE
+  ) +
+  labs(title = "Visitor Composition by Disneyland Branch",
+       y = "Number of Visitors",
+       x = "Branch") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Local" = "yellow", "Tourist" = "#FF7415")) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+
+```
+
 ## Part 4: Conclusion and Discussion
 
 🔷 What specific advice can we give to the Park management based on our analysis? How can we integrate the analysis of reviews in internal processes, can we think of any data products that would be of value?
