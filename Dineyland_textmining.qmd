@@ -166,7 +166,7 @@ reviews[reviews$language!= "en", ]
 
 To improve data quality and reduce the influence of spam or low-effort content, we implemented checks to identify and remove potentially fake or sponsored reviews. The filtering process involved two key steps:
 
-1.   Short Review Removal:\
+1.  Short Review Removal:\
     Very short reviews (fewer than 10 words) were identified and excluded. These were predominantly 5-star ratings with minimal content, often lacking meaningful information for analysis.
 
 2.  Duplicate Review Removal:\
@@ -198,11 +198,23 @@ reviews_clean<-reviews_clean %>%
 
 To solve this problem we mainly use NLPs.
 
---\> sie hat was darüber gesagt aber weisss es nicht mehr. Müssen wir das noch machen?
+--\> sie hat was darüber gesagt, aber ich weiss es nicht mehr. Müssen wir das noch machen?
 
 ## part 1: Content analysis and topic modeling
 
 🔷 What can we tell about the customers that write reviews?
+
+To begin our content analysis, we examined the length of review texts to understand how much customers typically write. The histogram above shows the distribution of review lengths (in number of characters).
+
+The results reveal that:
+
+-   Most customers write relatively short reviews, with a large concentration under 500 characters.
+
+-   A long tail exists, indicating that while a few reviews are exceptionally long (over 10,000 characters), they are rare.
+
+-   This suggests that the majority of feedback is brief, likely focused on high-level impressions or quick reactions, while only a minority of users provide detailed, in-depth reviews.
+
+Understanding this behavior helps shape our expectations for topic modeling and sentiment analysis—brief reviews may yield fewer unique insights per document, while longer reviews may offer richer semantic content.
 
 ```{r}
 # most of the customers write shorter reviews
@@ -213,7 +225,15 @@ reviews %>%
 
 ```
 
-Most of the reviews are for California and mostly from 2015-2017
+To understand the evolution of customer engagement over time, we visualized the number of reviews submitted each year across the three Disneyland branches: California, Hong Kong, and Paris.
+
+The bar chart shows review counts by year and park:
+
+-   California consistently leads in the number of reviews, peaking in 2015 with over 3,000 reviews.
+
+-   Paris and Hong Kong also show increasing review activity until around 2015, with Paris slightly ahead of Hong Kong overall.
+
+-   After 2016, all three parks experienced a gradual decline in review volume, which may be attributed to external factors like shifts in travel behavior, changing review habits, or global events.
 
 ```{r}
 
@@ -231,7 +251,17 @@ reviews %>%
 
 ```
 
-seems like peek visits in California are in July, in Paris August and in HongKong December
+To examine how review activity varies throughout the year, we analyzed the distribution of reviews by month for each Disneyland location: California, Hong Kong, and Paris.
+
+The bar chart above displays the number of reviews by month:
+
+-   Review activity increases during spring and summer, particularly from April to August, aligning with typical holiday and travel seasons.
+
+-   July and August are peak months across all three branches, especially in California, suggesting these are high-traffic periods for park visitors.
+
+-   There’s a secondary rise in November and December, possibly tied to winter holidays and seasonal events at the parks.
+
+-   California receives the highest review volume consistently throughout the year, followed by Paris and then Hong Kong.
 
 ```{r}
 # Extract month (abbreviated names for labels)
@@ -248,7 +278,25 @@ reviews %>%
 
 ```
 
-Seems like california has the lowest ratio of tourists who left a comment.
+To better understand who is writing the reviews, we categorized reviewers based on their location relative to each park:
+
+-   Local: The reviewer is from the same country as the park.
+
+-   Tourist: The reviewer is from a different country.
+
+We matched each park with its corresponding country and compared it to the reviewer’s location to assign a Visitor_Type. The summary table shows the distribution of local and tourist reviewers for each Disneyland branch:
+
+-   Disneyland Paris and Disneyland Hong Kong have overwhelmingly high proportions of tourist reviewers, with tourist ratios of 98.5% and 94.6%, respectively.
+
+-   Disneyland California, by contrast, has a significantly higher share of local reviewers, with a tourist ratio of 36.5%.
+
+This suggests that:
+
+-   The Paris and Hong Kong parks attract primarily international visitors.
+
+-   The California park serves a more balanced mix, with a strong local customer base likely due to its regional popularity and accessibility for U.S. residents.
+
+Understanding the local-vs-tourist split is important for interpreting review content and tailoring park communication or services to different visitor types.
 
 ```{r}
 branch_country <- tibble::tibble(
