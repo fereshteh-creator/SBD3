@@ -23,7 +23,7 @@ Please set your own virtual environment if needed
 
 
 reticulate::use_condaenv("huggingfaceR", required = TRUE)
-set.seed(19)
+
 
 ```
 
@@ -35,27 +35,46 @@ set.seed(19)
 #| warning: false
 #| code-fold: true
 
-library(tidyverse)            # Core data wrangling and visualization packages (dplyr, ggplot2, etc.)
-library(quanteda)             # Text tokenization, preprocessing, and creating document-feature matrices
-library(stopwords)            # Provides multilingual stopword lists for text cleaning
-library(topicmodels)          # Topic modeling algorithms like LDA and CTM (Latent Dirichlet Allocation)
-library(tidytext)             # Tidy-friendly tools for text mining and sentiment analysis
-library(quanteda.textplots)   # Visualization tools for quanteda objects (word clouds, networks, etc.)
-library(ggplot2)              # Grammar of graphics plotting system (used by tidyverse)
-library(scales)               # Formatting and scaling functions for plots (e.g., percentages, dates)
-library(devtools)             # Tools to install and manage R packages from GitHub
-library(plotly)               # Interactive plots (works well with ggplot2 for interactivity)
-library(readr)                # Efficient functions to read data (like CSVs) — part of tidyverse
-library(ldatuning)            # Helps choose optimal number of topics in LDA models
-library(bertopic)             # (If installed) R wrapper or interface to the Python BERTopic library
-library(htmltools)            # Used in HTML report rendering and interactive outputs (like word clouds)
-library(umap)                 # Uniform Manifold Approximation and Projection (UMAP) for dimensionality reduction
-library(reticulate)
+# Load required libraries
+library(tidyverse)      # Core packages: dplyr, ggplot2, etc.
+library(quanteda)       # Text tokenization and feature matrix creation
+library(stopwords)      # Multilingual stopword lists
+library(tidytext)       # Tidy-friendly text mining tools
+library(ggplot2)        # Grammar of graphics
+library(scales)         # Axis formatting utilities
+library(plotly)         # Interactive ggplot extensions
+library(readr)          # Efficient data reading
+library(bertopic)       # Python BERTopic interface
+library(htmltools)      # Report rendering support
+library(umap)           # UMAP for dimensionality reduction
+library(reticulate)     # Python-R integration
+library(quanteda.textplots)
 
+# Install missing R packages if needed
 if (!require("cld2")) install.packages("cld2")
 if (!require("hunspell")) install.packages("hunspell")
-library(cld2) # for language detection
-library(hunspell) # for spelling correction
+if (!require("patchwork")) install.packages("patchwork")
+if (!require("synthesisr")) install.packages("synthesisr")
+
+# Load helper libraries
+library(cld2)         # Language detection
+library(hunspell)     # Spelling correction
+library(synthesisr)   # Bibliometric tools
+library(patchwork)    # Plot composition
+
+# Avoid scientific notation
+options(scipen = 999)
+
+# Define required Python packages
+py_deps <- c("transformers", "torch", "numpy", "protobuf", "sentencepiece")
+
+# Install missing Python packages
+for (pkg in py_deps) {
+  if (!reticulate::py_module_available(pkg)) {
+    message(glue::glue("Installing missing Python package: {pkg}"))
+    reticulate::conda_install("huggingfaceR", pkg, pip = TRUE)
+  }
+}
 
 options(scipen=999)
 
@@ -149,7 +168,7 @@ Before performing text analysis, we first checked whether the reviews were writt
 
 -   A filter was then applied to identify any reviews not written in English.
 
-This step ensures that only English-language reviews are included in the analysis, avoiding noise or misinterpretation caused by multilingual content. Since its difficult to fully recognize other languages we will use multilingual models.
+The results show us that there are indeed other languages included in the reviews but we can't make sure that those are correctly detected, so instead of removing them we will make sure to use language models which are multilingual.
 
 ```{r}
 
@@ -157,73 +176,97 @@ This step ensures that only English-language reviews are included in the analysi
 reviews$language <- detect_language(reviews$Review_Text)
 
 # See if there are other languages in the data
-reviews[reviews$language!= "en", ]
+reviews[reviews$language!= "en", ] %>% 
+  select(Review_Text)
 
 
 ```
 
 -   **Fake or Sponsored Reviews:**
 
-To improve data quality and reduce the influence of spam or low-effort content, we implemented checks to identify and remove potentially fake or sponsored reviews. The filtering process involved two key steps:
+To improve data quality and reduce the influence of spam or generated content, we implemented checks to identify and remove potentially fake or sponsored reviews.
 
-1.  Short Review Removal:\
-    Very short reviews (fewer than 10 words) were identified and excluded. These were predominantly 5-star ratings with minimal content, often lacking meaningful information for analysis.
-
-2.  Duplicate Review Removal:\
-    Reviews with identical cleaned text (`Review_Text_clean`) were flagged as duplicates, likely indicating copy-pasted or spammed content. Only unique reviews were retained by removing entries that appeared more than once.
-
-This step helps ensure that the final dataset is composed of authentic, original, and content-rich reviews, enhancing the reliability of subsequent text analyses.
+First if we have look at the length of reviews we see that most of them are short, with some very long outliers:
 
 ```{r}
-# very short reviews seem to be mostly 5 star ratings
-reviews_clean %>% 
-  mutate(word_count = str_count(Review_Text, "\\w+")) %>%
-  arrange(word_count) %>%
-  select(Rating, Review_Text, word_count) %>% 
-  filter(word_count<10)
+# Add length column
+reviews_with_length <- reviews %>%
+  mutate(length = nchar(Review_Text))
 
-reviews_clean<-reviews_clean %>% 
-  mutate(word_count = str_count(Review_Text, "\\w+")) %>%
-  filter(word_count>10) %>% 
-  group_by(Review_Text_clean) %>% 
-    mutate(duplicate_count = n()) %>%
-    ungroup() %>% 
-    filter(duplicate_count == 1)
+# Histogram (converted to plotly)
+hist_plot <- ggplot(reviews_with_length, aes(x = length)) +
+  geom_histogram(binwidth = 50, fill = "grey30") +
+  labs(x = "Review Length", y = "Count") +
+  theme_minimal()
 
+hist_plotly <- ggplotly(hist_plot)
 
+# Boxplot (converted to plotly)
+box_plot <- ggplot(reviews_with_length, aes(y = length)) +
+  geom_boxplot(fill = "steelblue", outlier.size = 2) +
+  labs(y = "Review Length (Characters)", x = "") +
+  theme_minimal()
+
+box_plotly <- ggplotly(box_plot)
+
+# Combine side-by-side using subplot
+subplot(hist_plotly, box_plotly, nrows = 1, margin = 0.05, shareY = FALSE, titleX = TRUE, titleY = TRUE)
+```
+
+Based on what we can see in the interactive boxplot the upper fence is 1734 and since the lower fence would be negative we will keep all shorter reviews but remove everything longer that 1734 characters since thee could be high chance that these are generated, because usually people don't write such long reviews.
+
+```{r}
+
+reviews_clean <- reviews_clean %>%
+  mutate(length = nchar(Review_Text)) %>%
+  filter(length <= 1734)
+
+```
+
+Next lets see if there are any repeated copy pasted reviews which again is another sign of being fake.
+
+```{r}
+
+reviews_clean %>%
+  unnest_tokens(word, Review_Text_clean) %>%
+  group_by(Review_ID) %>%
+  summarise(seq = paste(word, collapse = " "), .groups = "drop") %>%
+  count(seq) %>%
+  filter(n > 1) %>%
+  inner_join(reviews_clean, by = c("seq" = "Review_Text_clean")) %>%
+  arrange(seq) %>% 
+  select(Review_Text)
     
 ```
 
--   **Spelling Mistakes:**\
+Since we caught some repeated reviews with different ID's we will also remove these.
 
-To solve this problem we mainly use NLPs.
+```{r}
 
---\> sie hat was darüber gesagt, aber ich weiss es nicht mehr. Müssen wir das noch machen?
+# Generate token sequence per review while keeping all columns
+unique_ids <- reviews_clean %>%
+  unnest_tokens(word, Review_Text_clean) %>%
+  group_by(Review_ID) %>%
+  mutate(seq = paste(word, collapse = " ")) %>%
+  ungroup() %>%
+  distinct(Review_ID, .keep_all = TRUE) %>%
+  add_count(seq) %>%
+  filter(n == 1) %>%     # keep only non-duplicate content
+  pull(Review_ID)
+
+# Step 2: Filter the original data (keep all original columns)
+reviews_clean <- reviews_clean %>%
+  filter(Review_ID %in% unique_ids)
+
+```
+
+-   **Spelling Mistakes:**
+
+To solve this problem we mainly use NLPs that are capable of context understanding.
 
 ## part 1: Content analysis and topic modeling
 
 🔷 What can we tell about the customers that write reviews?
-
-To begin our content analysis, we examined the length of review texts to understand how much customers typically write. The histogram above shows the distribution of review lengths (in number of characters).
-
-The results reveal that:
-
--   Most customers write relatively short reviews, with a large concentration under 500 characters.
-
--   A long tail exists, indicating that while a few reviews are exceptionally long (over 10,000 characters), they are rare.
-
--   This suggests that the majority of feedback is brief, likely focused on high-level impressions or quick reactions, while only a minority of users provide detailed, in-depth reviews.
-
-Understanding this behavior helps shape our expectations for topic modeling and sentiment analysis—brief reviews may yield fewer unique insights per document, while longer reviews may offer richer semantic content.
-
-```{r}
-# most of the customers write shorter reviews
-reviews %>%
-  mutate(length = nchar(Review_Text)) %>%
-  ggplot(aes(x = length)) +
-  geom_histogram(binwidth = 20)
-
-```
 
 To understand the evolution of customer engagement over time, we visualized the number of reviews submitted each year across the three Disneyland branches: California, Hong Kong, and Paris.
 
@@ -251,33 +294,6 @@ reviews %>%
 
 ```
 
-To examine how review activity varies throughout the year, we analyzed the distribution of reviews by month for each Disneyland location: California, Hong Kong, and Paris.
-
-The bar chart above displays the number of reviews by month:
-
--   Review activity increases during spring and summer, particularly from April to August, aligning with typical holiday and travel seasons.
-
--   July and August are peak months across all three branches, especially in California, suggesting these are high-traffic periods for park visitors.
-
--   There’s a secondary rise in November and December, possibly tied to winter holidays and seasonal events at the parks.
-
--   California receives the highest review volume consistently throughout the year, followed by Paris and then Hong Kong.
-
-```{r}
-# Extract month (abbreviated names for labels)
-reviews$month <- month(reviews$Year_Month, label = TRUE, abbr = TRUE)
-
-# Plot: Reviews by month and branch
-reviews %>%
-  count(month, Branch) %>%
-  ggplot(aes(x = month, y = n, fill = Branch)) +
-  geom_col(position = "dodge") +
-  labs(title = "Review Counts by Month and Branch",
-       x = "Month", y = "Number of Reviews") +
-  theme_minimal()
-
-```
-
 To better understand who is writing the reviews, we categorized reviewers based on their location relative to each park:
 
 -   Local: The reviewer is from the same country as the park.
@@ -294,7 +310,7 @@ This suggests that:
 
 -   The Paris and Hong Kong parks attract primarily international visitors.
 
--   The California park serves a more balanced mix, with a strong local customer base likely due to its regional popularity and accessibility for U.S. residents.
+-   The California park with a strong local customer base likely due to its regional popularity and better experience of so that they tend to go back.
 
 Understanding the local-vs-tourist split is important for interpreting review content and tailoring park communication or services to different visitor types.
 
@@ -321,8 +337,8 @@ reviews_tagged %>%
 
 🔷 What do the visitors talk about in their reviews and how does it relate sentiment/ratings?
 
-To understand the emotional tone of visitor reviews, we applied sentiment analysis using a pre-trained BERT model designed for multilingual text:\
-Model: `nlptown/bert-base-multilingual-uncased-sentiment` (via HuggingFace Transformers)
+To answer this question, we applied sentiment analysis using a pre-trained model designed for multilingual text:\
+Model: `cardiffnlp/twitter-xlm-roberta-base-sentiment` (via HuggingFace Transformers)
 
 #### Procedure:
 
@@ -333,18 +349,17 @@ Model: `nlptown/bert-base-multilingual-uncased-sentiment` (via HuggingFace Trans
     Each review was shortened to approximately 450 characters (\~512 tokens after tokenization) to meet model input constraints while retaining meaningful content.
 
 3.  Sentiment Classification:\
-    Using the HuggingFace Transformers pipeline, each review was passed through a sentiment classifier, which returned a predicted 1–5 star rating.
+    Using the HuggingFace Transformers pipeline, each review was passed through the `cardiffnlp/twitter-xlm-roberta-base-sentiment model`. This model was pre-trained on multilingual Twitter data and classifies text into one of three sentiment categories: positive, neutral, or negative.
 
-4.  Labeling:\
-    The numeric star predictions were converted into sentiment labels:
+Labeling: The model’s sentiment predictions were retained as-is and used to classify the tone of each review:
 
-    -   1–2 stars → NEGATIVE
+-   **negative → NEGATIVE**
 
-    -   3 stars → NEUTRAL
+-   **neutral → NEUTRAL**
 
-    -   4–5 stars → POSITIVE
+-   **positive → POSITIVE**
 
-This approach allowed us to classify review sentiment with a high degree of linguistic nuance, especially important for a multilingual dataset with short and informal text.
+This approach enabled sentiment classification with a focus on emotional tone and informal language, aligning well with the style and diversity of multilingual user reviews.
 
 #### Why this matters:
 
@@ -352,76 +367,63 @@ This sentiment layer enables us to:
 
 -   Compare emotional tone across parks and visitor types
 
--   Correlate sentiment with actual review ratings
-
--   Explore why Disneyland California may receive better reviews than Paris, especially considering its higher share of local visitors
-
-Next, we will visualize and interpret these sentiment results to uncover key insights
-
 ```{r}
-set.seed(9) 
+set.seed(1)
 
-# Shuffle and sample the data
+# Shuffle and sample
 sampled_reviews <- reviews_tagged %>%
   filter(!is.na(Review_Text_clean)) %>%
-  slice_sample(n = 10000) %>% 
-  mutate(Review_Text_clean = str_trunc(Review_Text_clean, 450))  # about 512 tokens after tokenization
+  slice_sample(n = 10000) %>%
+  mutate(Review_Text_clean = str_trunc(Review_Text_clean, 450))
 
-# Load Python's transformers package
+# Load transformers and set Python seed
 transformers <- import("transformers")
+reticulate::py_run_string("
+import random
+import numpy as np
+import torch
 
-# Load sentiment analysis pipeline
-sentiment_model <- transformers$pipeline(
-  task = "text-classification",
-  model = "nlptown/bert-base-multilingual-uncased-sentiment"
-)
+random.seed(1)
+np.random.seed(1)
+torch.manual_seed(1)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(1)
+")
 
 
-# Enable tokenizer parallelism 
 Sys.setenv(TOKENIZERS_PARALLELISM = "true")
 
+# Load sentiment pipeline for tweet model
+sentiment_model <- transformers$pipeline(
+  task = "sentiment-analysis",
+  model = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+)
+
+# Run predictions
 emo_results <- sampled_reviews %>%
   mutate(
     sentiment = map(Review_Text_clean, safely(sentiment_model))
   ) %>%
   mutate(
     sentiment_result = map(sentiment, ~ .x$result[[1]]),
-    stars = map_dbl(sentiment_result, ~ as.numeric(str_extract(.x$label, "\\d"))),
-    label = case_when(
-      stars <= 2 ~ "NEGATIVE",
-      stars == 3 ~ "NEUTRAL",
-      stars >= 4 ~ "POSITIVE"
-    )
+    label = map_chr(sentiment_result, ~ toupper(.x$label))  # POSITIVE, NEUTRAL, NEGATIVE
   )
 
-# Disable parallelism again     
 Sys.setenv(TOKENIZERS_PARALLELISM = "false")
-
-
  
 ```
 
-After applying sentiment analysis to a representative sample of reviews, we calculated the average predicted sentiment score (1–5) for each Disneyland branch:
+If we have a look at the average true ratings of our sample we notice that Disneyland Paris has the lowest average rating:
 
 ```{r}
-
-emo_results %>%
+sampled_reviews %>%
   group_by(Branch) %>%
-  summarise(avg_sentiment = mean(Rating, na.rm = TRUE))
-
+  summarise(avg_rating = mean(Rating, na.rm = TRUE))
 ```
-
-#### Key Observations:
-
--   Disneyland California has the highest average sentiment, suggesting visitors generally express more positive feelings in their reviews.
-
--   Disneyland Paris has the lowest sentiment score, indicating a less favorable emotional tone in its reviews, on average.
-
-This supports the initial observation that California receives better reviews, and now we begin to understand how people feel, not just what star ratings they assign.
 
 ### Sentiment by Visitor Type and Park Branch
 
-The chart above breaks down review sentiment by **visitor type (Local vs. Tourist)** for each Disneyland location. It reveals an important pattern:
+The chart bellow breaks down review sentiment by **visitor type (Local vs. Tourist)** for each Disneyland location. It reveals an important pattern:
 
 ```{r}
 
@@ -453,15 +455,13 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 #### Disneyland Paris:
 
--   Has the highest share of negative reviews, especially from tourists (over 40% negative).
+-   Has the highest share of negative reviews, especially from locals (over 35% negative).
 
--   Positive reviews from tourists are significantly lower than in California and Hong Kong.
-
--   Locals also express relatively low positivity and high negativity, though they represent a very small share of total reviewers.
+-   Positive reviews from tourists are lower than in California or Hong Kong.
 
 #### Disneyland California:
 
--   Both locals and tourists show strong positive sentiment, with over 60% of reviews classified as positive.
+-   Both locals and tourists show strong positive sentiment, with close to 60% of reviews classified as positive.
 
 -   Negative sentiment is notably lower among tourists here than in Paris.
 
@@ -469,7 +469,7 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 -   Sentiment is relatively balanced and positive for both locals and tourists.
 
--   Like California, over 60% of tourist reviews are positive
+-   Locals are mostly neutral here.
 
 To better understand the content of negative feedback at Disneyland Paris, we generated a word cloud from the most frequently used words in negative sentiment reviews. Common branding terms like “Disneyland,” “Disney,” “park,” and “day” were removed to focus on specific experiences.
 
@@ -499,7 +499,7 @@ textplot_wordcloud(
   paris_dfm,
   min_count = 10,
   max_words = 100,
-  color = "darkblue",
+  color = "purple",
   min_size = 0.5,
   max_size = 4
 )
@@ -522,15 +522,9 @@ textplot_wordcloud(
     Frequent mentions of *“kids,” “children,” “family,” “characters”* reflect expectations around family-friendly experiences—possibly unmet for many visitors.
 
 -   Crowds and space:\
-    Words like *“people,” “crowded,” “walking,” “line,” “parade”* indicate overcrowding or logistical challenges in navigating the park.
+    Words like *“people,” “walking,” “line,” “parade”* indicate overcrowding or logistical challenges in navigating the park.
 
-### Conclusion:
-
-This word cloud reinforces the findings from the sentiment analysis:
-
-Many negative reviews for Disneyland Paris stem from long queues, high costs, and service quality, particularly from tourist visitors who may have high expectations and limited time.
-
-Combined with the earlier insight that Paris has fewer local reviewers, it becomes clear that managing international guest expectations and experience logistics could be key to improving sentiment.
+### Topic Modeling
 
 To go beyond individual words and uncover deeper patterns in the complaints, we applied BERTopic, a transformer-based topic modeling algorithm. This technique groups reviews into coherent topics based on semantic similarity, using a multilingual sentence embedding model to understand context and nuance across languages.
 
@@ -543,6 +537,37 @@ To go beyond individual words and uncover deeper patterns in the complaints, we 
 -   Number of topics: Up to 6 (auto-reduced to 2 dominant topics based on content)
 
 ```{r}
+
+# Import necessary Python packages
+umap <- import("umap")
+hdbscan <- import("hdbscan")
+
+set.seed(1)
+
+reticulate::py_run_string("
+import random
+import numpy as np
+
+random.seed(1)
+np.random.seed(1)
+")
+# Define UMAP with fixed seed
+umap_model <- umap$UMAP(
+  n_neighbors = 20L,
+  n_components = 5L,
+  min_dist = 0.0,
+  metric = "cosine",
+  random_state = 1L
+)
+
+# Define HDBSCAN with fixed seed
+hdbscan_model <- hdbscan$HDBSCAN(
+  min_cluster_size = 10L,
+  metric = "euclidean",
+  cluster_selection_method = "eom",
+  prediction_data = TRUE
+)
+
 # Load Python modules
 bert <- import("bertopic")
 sentence_transformers <- import("sentence_transformers")
@@ -550,9 +575,12 @@ sentence_transformers <- import("sentence_transformers")
 # Embedding model (multilingual)
 embedding_model <- sentence_transformers$SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
+# Initialize BERTopic with fixed UMAP + HDBSCAN
 topic_model <- bert$BERTopic(
   embedding_model = embedding_model,
-  nr_topics = r_to_py(6L),
+  umap_model = umap_model,
+  hdbscan_model = hdbscan_model,
+  nr_topics = r_to_py(7L),
   calculate_probabilities = TRUE,
   verbose = TRUE
 )
@@ -578,23 +606,19 @@ topic_model$get_topic_info()
 
 Key Takeaways:
 
--   One dominant topic (Topic 1) encompasses the vast majority of reviews, clearly indicating that logistical issues (e.g., waiting, food quality, staff performance) are the biggest source of dissatisfaction.
+-   Long wait times, slow food service and closed attractions (time_food_closed_kids)
 
--   A smaller topic (Topic 0) highlights issues with cleanliness and family experience, which while less common, may point to isolated but impactful problems — especially for visitors with children.
+-   Staff rudeness and smoking staff (smoking_people_smoke_staff)
 
-Contextual Insight
+-   Smoking-related concerns and enforcement (smoking_people_smoke_staff)
 
-This analysis supports earlier findings from the word cloud and sentiment breakdown:
+-   Toilet cleanliness and hygiene (toilets_disgusting_toilet_euro)
 
--   Tourists, who make up the vast majority of reviewers for Disneyland Paris, are particularly sensitive to time management, value for money, and service quality.
-
--   The lack of local reviewers means there’s less balancing feedback from visitors with lower expectations or more familiarity with the park experience.
-
-Together, these topics provide actionable insight into why Disneyland Paris has a higher share of negative reviews, helping guide potential areas for improvement such as queue management, service training, and cleanliness.
+A substantial number of reviews were labeled with Topic -1, which is actually very similar to topic 0, indicating that many of the negative reviews were because of food long queues, staff and closed attractions.
 
 ### Frequency of Topics in Negative Disneyland Paris Reviews
 
-Using **BERTopic**, we extracted and categorized common themes in 1,000 negative reviews of **Disneyland Paris**. The chart above shows the frequency of each topic, based on semantic clustering of similar reviews.
+Using **BERTopic**, we extracted and categorized common themes in 1,000 negative reviews of **Disneyland Paris**. The chart bellow shows the frequency of each topic, based on semantic clustering of similar reviews.
 
 ```{r}
 
@@ -616,24 +640,6 @@ topic_info_df %>%
 
 ```
 
-#### Top 5 Negative Themes Identified:
-
-1.  Time, Staff, Fast Food\
-    — The dominant topic, with nearly 400 mentions\
-    — Complaints about long waits, staff interactions, and poor food quality
-
-2.  Food, Expensive, Queues, Overpriced\
-    — Highlights issues with high prices, long queues, and perceived lack of value
-
-3.  Closed Rides (Pirates, Mountain, Caribbean)\
-    — Visitors frustrated with major rides being closed or unavailable
-
-4.  Smoking, Smoke, People, Children\
-    — Concerns about second-hand smoke exposure, particularly around children
-
-5.  Toilets, Dirty, Staff, Disgusting\
-    — Hygiene and cleanliness issues, especially with bathrooms and service areas
-
 ### Key Takeaways
 
 -   The most dominant issues revolve around time management, food service, and staff experience — these align strongly with earlier findings from the word cloud and sentiment classification.
@@ -650,7 +656,7 @@ This insight can guide targeted service improvements to raise satisfaction and r
 
 ### Visualizing Topic Clusters with UMAP
 
-To better understand the distribution of themes in negative reviews at Disneyland Paris, we applied UMAP (Uniform Manifold Approximation and Projection) to reduce the high-dimensional text embeddings into two dimensions. Each point represents a single review, and colors indicate the topic assigned by the BERTopic model.
+To visulaize the clusters, we applied UMAP (Uniform Manifold Approximation and Projection) to reduce the high-dimensional text embeddings into two dimensions. Each point represents a single review, and colors indicate the topic assigned by the BERTopic model.
 
 ```{r}
 
@@ -678,72 +684,39 @@ ggplotly(
 
 #### Key Observations:
 
--   The plot reveals two main clusters:
+The largest cluster encompassed a wide range of general complaints, with common themes involving wait times, food availability, and attraction closures — particularly affecting families with children. This dominant topic reflects the broad operational frustrations most frequently expressed by guests.
 
-    -   Topic 1 (blue): The dominant group, covering the majority of negative reviews. These reviews focus on issues like queues, staff, food quality, and long waiting times.
-
-    -   Topic 0 (red): A smaller, well-separated cluster with more specific issues like hygiene, toilets, and children-related complaints.
-
--   The distinct spatial separation of Topic 0 suggests that this cluster is semantically unique — i.e., reviews in this group are notably different in tone and content from the rest.
-
--   The density and volume of Topic 1 reflect its role as the primary driver of dissatisfaction, consistent with earlier frequency charts and word clouds.
-
-Why This Visualization Matters
-
-This clustering provides strong qualitative support for the quantitative findings:
-
--   Most negative sentiment is concentrated around operational frustrations (time, service, food).
-
--   A smaller but cohesive subgroup of complaints relates to cleanliness and child-friendliness, which could represent high-impact issues for families.
-
-By visualizing the semantic landscape of negative feedback, we gain an intuitive understanding of how complaints are grouped — helping Disneyland Paris prioritize both broad systemic improvements and niche but critical pain points.
+Smaller, more tightly defined clusters captured specific concerns, such as cleanliness issues, smoking enforcement, and staff interactions. Several reviews referenced unmet expectations when compared to other Disney parks, suggesting that the perceived quality of service in Paris may fall short of what guests anticipate based on international standards.
 
 ### Topic Modeling of Positive Reviews – Disneyland California
 
-To understand why Disneyland California receives the most positive reviews, we applied BERTopic to cluster and summarize key themes found in positive sentiment reviews.
-
-Using the same multilingual embedding model, the reviews were grouped into semantically meaningful topics. Only unique (non-duplicate) reviews were included, and each review was truncated for processing efficiency.
+To help Disneyland in Paris to improve even more lets look at the reasons behind very positive reviews of California
 
 ```{r}
 
+# Use same UMAP, HDBSCAN, and embedding_model as before
 
-# Filter out text that appears more than once
-emo_results <- emo_results %>%
-  filter(duplicate_count == 1)
-
-reviews_california_pos <- emo_results %>%
-  filter(Branch == "Disneyland_California", label == "POSITIVE",  !is.na(Review_Text_clean)) %>%
+# Filter for positive reviews from Disneyland California
+docs_california_pos <- emo_results %>%
+  filter(Branch == "Disneyland_California", label == "POSITIVE", !is.na(Review_Text_clean)) %>%
+  slice_sample(n = 1000) %>%
   pull(Review_Text_clean)
 
-reviews_california_pos <- reviews_california_pos %>%
-  str_squish() %>%
-  str_trunc(300)  # if input is long
-
-# Use same embedding model as before
+# Fit topic model on positive California reviews
 topic_model_california <- bert$BERTopic(
   embedding_model = embedding_model,
-  min_topic_size = 30L,
+  umap_model = umap_model,
+  hdbscan_model = hdbscan_model,
+  nr_topics = r_to_py(7L),
   calculate_probabilities = TRUE,
   verbose = TRUE
 )
 
-topic_results_california <-topic_model_california$fit_transform(reviews_california_pos)
+# Run the model (best in console)
+topic_results_california <- topic_model_california$fit_transform(docs_california_pos)
+
+# View topic summary
 topic_model_california$get_topic_info()
-
-topic_info_2 <- topic_model_california$get_topic_info()
-topic_info_df_2 <- py_to_r(topic_info_2)
-
-
-
-
-topic_info_df_2 %>%
-  filter(Count >20, Topic!=-1) %>% 
-  ggplot(aes(x = reorder(Name, Count), y = Count, fill = Name)) +
-  geom_col(show.legend = FALSE) +
-  labs(title = "Frequency of Topics in positive California Reviews",
-       x = "Theme", y = "Number of Reviews") +
-  theme_minimal() +
-  coord_flip()
 
 
 
@@ -776,7 +749,7 @@ The high volume of local visitors in California may explain the more positive, f
 
 🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
 
-To explore how visitor feedback varies over time, we analyzed monthly review counts for each Disneyland location from 2010 to 2019. The line chart above shows review volume by month, year, and branch (California, Hong Kong, and Paris).
+To explore how visitor feedback varies over time, we analyzed monthly review counts for each Disneyland location from 2010 to 2019. The line chart bellow shows review volume by month, year, and branch (California, Hong Kong, and Paris).
 
 ```{r}
 reviews <- reviews %>%
@@ -799,9 +772,13 @@ monthly_reviews$month <- factor(monthly_reviews$month,
 ggplot(monthly_reviews, aes(x = month, y = n, color = as.factor(year), group = year)) +
   geom_line() +
   facet_wrap(~ Branch, scales = "free_y") +
-  labs(title = "Monthly Review Trends per Year and Branch",
-       x = "Month", y = "Number of Reviews", color = "Year") +
-  theme_minimal()
+  labs(
+    title = "Monthly Review Trends per Year and Branch",
+    x = "Month", y = "Number of Reviews", color = "Year"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9))
+
 
 ```
 
@@ -941,53 +918,14 @@ ggplot(sentiment_normalized_yearly, aes(x = Year, y = percent, color = label)) +
   theme_minimal()
 ```
 
-Disneyland California:
+**Disneyland California**\
+Positive sentiment remains consistently strong throughout the decade, hovering around 50-40%. Negative sentiment shows a gradual increase over time, but still remains lower than both positive and neutral sentiment. Neutral sentiment stays fairly stable across the years.
 
--   Maintains a consistently high proportion of positive sentiment, averaging above 60%.
+**Disneyland Hong Kong**\
+Positive sentiment seems to go down from 2017-2018 and in contrast neutral sentiment goes up. There's a dramatic spike in neutral sentiment in 2019, suggesting a possible lower satisfaction in guest experience or operations. Negative sentiment remains relatively low and stable after a sharp drop in 2011.
 
--   Negative sentiment remains relatively low, with only slight increases in 2017–2018 (coinciding with minor dips in star ratings).
-
--   Neutral reviews remain low and stable.
-
-Interpretation: California’s strong local visitor base and consistent service likely help maintain positive emotional responses, even when operational issues arise.
-
-Disneyland Hong Kong:
-
--   Shows a significant shift toward positive sentiment after 2010.
-
--   From 2011 onward, positive reviews dominate, making up \~60–65% annually.
-
--   Negative sentiment sharply declined after 2010 and remained low, suggesting successful improvements early in the decade.
-
-Interpretation: The early 2010s may have seen impactful quality upgrades or marketing improvements. Sentiment remains fairly strong, though not quite as consistently high as California.
-
-Disneyland Paris:
-
--   Displays the most dramatic shift in sentiment:
-
-    -   In 2010–2011, positive sentiment dominated.
-
-    -   From 2012 onward, there’s a steady decline in positivity, dropping below 50% by 2018–2019.
-
-    -   Meanwhile, negative sentiment rises, matching or exceeding positive reviews in recent years.
-
--   Neutral sentiment remains relatively flat.
-
-Interpretation: Paris is experiencing a clear sentiment erosion. This aligns with prior findings of:
-
--   A large share of tourist reviewers
-
--   Complaints around queues, food, staff, cleanliness
-
--   Low average ratings in recent years
-
-Summary
-
-This sentiment timeline reinforces the key finding:
-
-Disneyland California earns and sustains the best emotional response over time, while Disneyland Paris is experiencing growing dissatisfaction — especially from tourists.
-
-These trends are valuable for long-term operational monitoring and can help prioritize improvements for guest experience, crowd control, and service training, particularly in Paris.
+**Disneyland Paris**\
+Contrary to the average trend, positive sentiment alone **increased** after 2013 and remained stable or even slightly rising through 2018 although the number of reviews overall has also decreased overtime. Neutral sentiment steadily decreased, while negative sentiment rose modestly over time — but did not surpass positive sentiment. This indicates a **more mixed sentiment trend**, rather than a clear decline but as we can see, the lines are very close to each other in comparison to California and Hong Kong, so the ratios are very similar and the drop of neutral reviews in combination with the rise of negative ones, resulted in an average down going trend .
 
 ### Visitor Composition by Disneyland Branch
 
