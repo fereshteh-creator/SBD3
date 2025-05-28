@@ -321,6 +321,43 @@ reviews_tagged %>%
 
 🔷 What do the visitors talk about in their reviews and how does it relate sentiment/ratings?
 
+To understand the emotional tone of visitor reviews, we applied sentiment analysis using a pre-trained BERT model designed for multilingual text:\
+Model: `nlptown/bert-base-multilingual-uncased-sentiment` (via HuggingFace Transformers)
+
+#### Procedure:
+
+1.  Sampling:\
+    A random sample of 10,000 cleaned reviews was selected to ensure efficient yet representative processing.
+
+2.  Truncation:\
+    Each review was shortened to approximately 450 characters (\~512 tokens after tokenization) to meet model input constraints while retaining meaningful content.
+
+3.  Sentiment Classification:\
+    Using the HuggingFace Transformers pipeline, each review was passed through a sentiment classifier, which returned a predicted 1–5 star rating.
+
+4.  Labeling:\
+    The numeric star predictions were converted into sentiment labels:
+
+    -   1–2 stars → NEGATIVE
+
+    -   3 stars → NEUTRAL
+
+    -   4–5 stars → POSITIVE
+
+This approach allowed us to classify review sentiment with a high degree of linguistic nuance, especially important for a multilingual dataset with short and informal text.
+
+#### Why this matters:
+
+This sentiment layer enables us to:
+
+-   Compare emotional tone across parks and visitor types
+
+-   Correlate sentiment with actual review ratings
+
+-   Explore why Disneyland California may receive better reviews than Paris, especially considering its higher share of local visitors
+
+Next, we will visualize and interpret these sentiment results to uncover key insights
+
 ```{r}
 set.seed(9) 
 
@@ -364,7 +401,7 @@ Sys.setenv(TOKENIZERS_PARALLELISM = "false")
  
 ```
 
-ratings dont seem so good for paris
+After applying sentiment analysis to a representative sample of reviews, we calculated the **average predicted sentiment score (1–5)** for each Disneyland branch:
 
 ```{r}
 
@@ -374,7 +411,17 @@ emo_results %>%
 
 ```
 
-Paris has many negative reviews why?
+#### Key Observations:
+
+-   Disneyland California has the highest average sentiment, suggesting visitors generally express more positive feelings in their reviews.
+
+-   Disneyland Paris has the lowest sentiment score, indicating a less favorable emotional tone in its reviews, on average.
+
+This supports the initial observation that California receives better reviews, and now we begin to understand how people feel, not just what star ratings they assign.
+
+### Sentiment by Visitor Type and Park Branch
+
+The chart above breaks down review sentiment by **visitor type (Local vs. Tourist)** for each Disneyland location. It reveals an important pattern:
 
 ```{r}
 
@@ -404,7 +451,27 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 ```
 
-Look at words or maybe cloud of words
+#### Disneyland Paris:
+
+-   Has the highest share of negative reviews, especially from tourists (over 40% negative).
+
+-   Positive reviews from tourists are significantly lower than in California and Hong Kong.
+
+-   Locals also express relatively low positivity and high negativity, though they represent a very small share of total reviewers.
+
+#### Disneyland California:
+
+-   Both locals and tourists show strong positive sentiment, with over 60% of reviews classified as positive.
+
+-   Negative sentiment is notably lower among tourists here than in Paris.
+
+#### Disneyland Hong Kong:
+
+-   Sentiment is relatively balanced and positive for both locals and tourists.
+
+-   Like California, over 60% of tourist reviews are positive
+
+To better understand the content of negative feedback at Disneyland Paris, we generated a word cloud from the most frequently used words in negative sentiment reviews. Common branding terms like “Disneyland,” “Disney,” “park,” and “day” were removed to focus on specific experiences.
 
 ```{r}
 
@@ -440,7 +507,40 @@ textplot_wordcloud(
 
 ```
 
-Lets use bertopic to find out what they are talking about
+#### Key Themes from the Word Cloud:
+
+-   Time and waiting:\
+    Words like *“time,” “minutes,” “queue,” “queues,” “wait,” “hours,” “waiting,” “long,” “closed”* indicate visitor frustration with long wait times, ride closures, and inefficient time use.
+
+-   Food and cost:\
+    Words such as *“food,” “expensive,” “money,” “tickets,” “cost”* suggest concerns about high prices and poor value for money.
+
+-   Service and staff:\
+    The prominence of *“staff,” “rude,” “service,” “hotel,” “restaurant”* points to inconsistent service quality and possible hospitality issues, especially in hotels and dining.
+
+-   Children and families:\
+    Frequent mentions of *“kids,” “children,” “family,” “characters”* reflect expectations around family-friendly experiences—possibly unmet for many visitors.
+
+-   Crowds and space:\
+    Words like *“people,” “crowded,” “walking,” “line,” “parade”* indicate overcrowding or logistical challenges in navigating the park.
+
+### Conclusion:
+
+This word cloud reinforces the findings from the sentiment analysis:
+
+Many negative reviews for Disneyland Paris stem from long queues, high costs, and service quality, particularly from tourist visitors who may have high expectations and limited time.
+
+Combined with the earlier insight that Paris has fewer local reviewers, it becomes clear that managing international guest expectations and experience logistics could be key to improving sentiment.
+
+To go beyond individual words and uncover deeper patterns in the complaints, we applied BERTopic, a transformer-based topic modeling algorithm. This technique groups reviews into coherent topics based on semantic similarity, using a multilingual sentence embedding model to understand context and nuance across languages.
+
+#### Model Setup:
+
+-   Model: `BERTopic` with `paraphrase-multilingual-MiniLM-L12-v2` embedding
+
+-   Data: 1,000 randomly sampled negative sentiment reviews from Disneyland Paris
+
+-   Number of topics: Up to 6 (auto-reduced to 2 dominant topics based on content)
 
 ```{r}
 # Load Python modules
@@ -475,6 +575,22 @@ topic_model$get_topic_info()
 
    
 ```
+
+Key Takeaways:
+
+-   One dominant topic (Topic 1) encompasses the vast majority of reviews, clearly indicating that logistical issues (e.g., waiting, food quality, staff performance) are the biggest source of dissatisfaction.
+
+-   A smaller topic (Topic 0) highlights issues with cleanliness and family experience, which while less common, may point to isolated but impactful problems — especially for visitors with children.
+
+Contextual Insight
+
+This analysis supports earlier findings from the word cloud and sentiment breakdown:
+
+-   Tourists, who make up the vast majority of reviewers for Disneyland Paris, are particularly sensitive to time management, value for money, and service quality.
+
+-   The lack of local reviewers means there’s less balancing feedback from visitors with lower expectations or more familiarity with the park experience.
+
+Together, these topics provide actionable insight into why Disneyland Paris has a higher share of negative reviews, helping guide potential areas for improvement such as queue management, service training, and cleanliness.
 
 Lets visulize
 
