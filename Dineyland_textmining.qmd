@@ -273,6 +273,15 @@ To solve this problem we mainly use NLPs that are capable of context understandi
 
 🔷 What can we tell about the customers that write reviews?
 
+
+If we have a look at the average ratings of the reviews we notice that Disneyland Paris has the lowest average rating:
+
+```{r}
+reviews %>%
+  group_by(Branch) %>%
+  summarise(avg_rating = mean(Rating, na.rm = TRUE))
+```
+
 To understand the evolution of customer engagement over time, we visualized the number of reviews submitted each year across the three Disneyland branches: California, Hong Kong, and Paris.
 
 
@@ -301,6 +310,7 @@ The bar chart shows review counts by year and park:
 
 -   After 2016, all three parks experienced a gradual decline in review volume, which may be attributed to external factors like shifts in travel behavior, changing review habits, or global events.
 
+*What this Chart also shows us is that although Paris has the lowest ratings, it doesn't have the smallest number of visitors who left a review. Up unitl 2019 it still had more visitors than Hong Kong, which shows that this branch is important and the visitors who left a review, had something to say and that they, expect improvements.*
 
 
 To see who is writing the reviews, we categorized reviewers based on their location relative to each park:
@@ -420,13 +430,7 @@ Sys.setenv(TOKENIZERS_PARALLELISM = "false")
 ```
 
 
-If we have a look at the average true ratings of our sample we notice that Disneyland Paris has the lowest average rating:
 
-```{r}
-sampled_reviews %>%
-  group_by(Branch) %>%
-  summarise(avg_rating = mean(Rating, na.rm = TRUE))
-```
 
 ### Sentiment by Visitor Type and Park Branch
 
