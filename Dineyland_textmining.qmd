@@ -3,7 +3,7 @@ title: "Text_Mining"
 author: "Fereshteh Ahmadi, Seraina Felicitas Zimmermann, Michael Etter, Donjet Dzemaili"
 format:
   html:
-    df-print: paged
+    df-print: kable
     toc: true
     code-tools: true
 
@@ -86,23 +86,26 @@ options(scipen=999)
 
 This dataset contains user-generated reviews for Disneyland parks in Hong Kong, California, and Paris. It captures various attributes of each review, enabling analysis of visitor feedback across locations and over time. The dataset includes the following columns:
 
--   review_id: A unique identifier assigned to each review.
+-   Review_ID: A unique identifier assigned to each review.
 
 -   Rating: A numerical score provided by the reviewer, indicating their overall satisfaction.
 
 -   Year_Month: The year and month when the review was posted.
 
--   Reviewer Location: The geographical location of the reviewer, as stated in their profile.
+-   Reviewer_Location: The geographical location of the reviewer, as stated in their profile.
+
+-   Review_Text: The full text of the review, expressing the reviewer's experience and opinions.
 
 -   Year: The year when the review was written, extracted from the Year_Month field.
 
--   Review Text: The full text of the review, expressing the reviewer's experience and opinions.
+-   Branch: For which branch the review was written.
 
--   Language: The language in which the review was written.
+
+
 
 ```{r}
 load('Disneyland.rda')
-head(reviews)
+head(reviews, 1)
 ```
 
 ### Data tidying
@@ -168,7 +171,7 @@ Before performing text analysis, we first checked whether the reviews were writt
 
 -   A filter was then applied to identify any reviews not written in English.
 
-The results show us that there are indeed other languages included in the reviews but we can't make sure that those are correctly detected, so instead of removing them we will make sure to use language models which are multilingual.
+The results show us that there are indeed other languages included in the reviews but we can't make sure that those are correctly detected, specially since some of them contain multiple languages in one review. So instead of removing them we will make sure to use language models which are multilingual.
 
 ```{r}
 
@@ -177,7 +180,8 @@ reviews$language <- detect_language(reviews$Review_Text)
 
 # See if there are other languages in the data
 reviews[reviews$language!= "en", ] %>% 
-  select(Review_Text)
+  select(Review_Text) %>% 
+  head(3)
 
 
 ```
@@ -235,7 +239,8 @@ reviews_clean %>%
   filter(n > 1) %>%
   inner_join(reviews_clean, by = c("seq" = "Review_Text_clean")) %>%
   arrange(seq) %>% 
-  select(Review_Text)
+  select(Review_Text) %>% 
+  head(4)
     
 ```
 
@@ -264,19 +269,13 @@ reviews_clean <- reviews_clean %>%
 
 To solve this problem we mainly use NLPs that are capable of context understanding.
 
-## part 1: Content analysis and topic modeling
+## Part 1: Content analysis and topic modeling
 
 🔷 What can we tell about the customers that write reviews?
 
 To understand the evolution of customer engagement over time, we visualized the number of reviews submitted each year across the three Disneyland branches: California, Hong Kong, and Paris.
 
-The bar chart shows review counts by year and park:
 
--   California consistently leads in the number of reviews, peaking in 2015 with over 3,000 reviews.
-
--   Paris and Hong Kong also show increasing review activity until around 2015, with Paris slightly ahead of Hong Kong overall.
-
--   After 2016, all three parks experienced a gradual decline in review volume, which may be attributed to external factors like shifts in travel behavior, changing review habits, or global events.
 
 ```{r}
 
@@ -294,7 +293,17 @@ reviews %>%
 
 ```
 
-To better understand who is writing the reviews, we categorized reviewers based on their location relative to each park:
+The bar chart shows review counts by year and park:
+
+-   California consistently leads in the number of reviews, peaking in 2015 with over 3,000 reviews.
+
+-   Paris and Hong Kong also show increasing review activity until around 2015, with Paris slightly ahead of Hong Kong overall.
+
+-   After 2016, all three parks experienced a gradual decline in review volume, which may be attributed to external factors like shifts in travel behavior, changing review habits, or global events.
+
+
+
+To see who is writing the reviews, we categorized reviewers based on their location relative to each park:
 
 -   Local: The reviewer is from the same country as the park.
 
@@ -302,17 +311,6 @@ To better understand who is writing the reviews, we categorized reviewers based 
 
 We matched each park with its corresponding country and compared it to the reviewer’s location to assign a Visitor_Type. The summary table shows the distribution of local and tourist reviewers for each Disneyland branch:
 
--   Disneyland Paris and Disneyland Hong Kong have overwhelmingly high proportions of tourist reviewers, with tourist ratios of 98.5% and 94.6%, respectively.
-
--   Disneyland California, by contrast, has a significantly higher share of local reviewers, with a tourist ratio of 36.5%.
-
-This suggests that:
-
--   The Paris and Hong Kong parks attract primarily international visitors.
-
--   The California park with a strong local customer base likely due to its regional popularity and better experience of so that they tend to go back.
-
-Understanding the local-vs-tourist split is important for interpreting review content and tailoring park communication or services to different visitor types.
 
 ```{r}
 branch_country <- tibble::tibble(
@@ -332,6 +330,19 @@ reviews_tagged %>%
          Tourist_Ratio = Tourist / Total)
 
 ```
+-   Disneyland Paris and Disneyland Hong Kong have overwhelmingly high proportions of tourist reviewers, with tourist ratios of 98.5% and 94.6%, respectively.
+
+-   Disneyland California, by contrast, has a significantly higher share of local reviewers, with a tourist ratio of 36.5%.
+
+This suggests that:
+
+-   The Paris and Hong Kong parks attract primarily international visitors.
+
+-   The California park with a strong local customer base likely due to its regional popularity and better experience, so that they tend to go back.
+
+Understanding the local-vs-tourist split is important for interpreting review content and tailoring park communication or services to different visitor types.
+
+
 
 ## Part 2: Sentiment analysis
 
@@ -349,7 +360,7 @@ Model: `cardiffnlp/twitter-xlm-roberta-base-sentiment` (via HuggingFace Transfor
     Each review was shortened to approximately 450 characters (\~512 tokens after tokenization) to meet model input constraints while retaining meaningful content.
 
 3.  Sentiment Classification:\
-    Using the HuggingFace Transformers pipeline, each review was passed through the `cardiffnlp/twitter-xlm-roberta-base-sentiment model`. This model was pre-trained on multilingual Twitter data and classifies text into one of three sentiment categories: positive, neutral, or negative.
+    Using the HuggingFace Transformers pipeline, each review was passed through the `cardiffnlp/twitter-xlm-roberta-base-sentiment model`. This model was pre-trained on multilingual Twitter data and classifies text into one of three sentiment categories: positive, neutral, or negative. Although twitter data is not the same as review data, we mainly care about how people feel and since this is one of the best multilingual models, that were listed for sentiment analysis, but we need to be aware of biases that might potentially occur. 
 
 Labeling: The model’s sentiment predictions were retained as-is and used to classify the tone of each review:
 
@@ -361,11 +372,6 @@ Labeling: The model’s sentiment predictions were retained as-is and used to cl
 
 This approach enabled sentiment classification with a focus on emotional tone and informal language, aligning well with the style and diversity of multilingual user reviews.
 
-#### Why this matters:
-
-This sentiment layer enables us to:
-
--   Compare emotional tone across parks and visitor types
 
 ```{r}
 set.seed(1)
@@ -412,6 +418,7 @@ emo_results <- sampled_reviews %>%
 Sys.setenv(TOKENIZERS_PARALLELISM = "false")
  
 ```
+
 
 If we have a look at the average true ratings of our sample we notice that Disneyland Paris has the lowest average rating:
 
@@ -594,7 +601,8 @@ docs <- emo_results %>%
 topic_results <- topic_model$fit_transform(docs)
 
 # Get summary of topics
-topic_model$get_topic_info()
+topic_model$get_topic_info() %>% 
+  select(Topic, Count, Name)
 
 
 
@@ -604,7 +612,6 @@ topic_model$get_topic_info()
    
 ```
 
-Key Takeaways:
 
 -   Long wait times, slow food service and closed attractions (time_food_closed_kids)
 
@@ -640,7 +647,6 @@ topic_info_df %>%
 
 ```
 
-### Key Takeaways
 
 -   The most dominant issues revolve around time management, food service, and staff experience — these align strongly with earlier findings from the word cloud and sentiment classification.
 
@@ -716,7 +722,8 @@ topic_model_california <- bert$BERTopic(
 topic_results_california <- topic_model_california$fit_transform(docs_california_pos)
 
 # View topic summary
-topic_model_california$get_topic_info()
+topic_model_california$get_topic_info() %>% 
+  select(Topic, Count, Name)
 
 
 
@@ -729,8 +736,6 @@ This breakdown confirms that Disneyland California’s positive reviews are rich
 
 -   Efficient logistics (fast passes, wait times)
 
--   Emotional connection and nostalgia
-
 -   Family experiences and kid-friendly environments
 
 -   Special events like Halloween and Christmas
@@ -739,11 +744,7 @@ This breakdown confirms that Disneyland California’s positive reviews are rich
 
 -   Cleanliness and staff friendliness
 
-These themes are notably absent or negatively framed in reviews of Disneyland Paris — especially regarding staff and time efficiency — reinforcing your earlier findings.
-
-Final Insight
-
-The high volume of local visitors in California may explain the more positive, familiar, and emotionally rich feedback — especially compared to Disneyland Paris, which sees more critical feedback from tourists expecting a flawless once-in-a-lifetime experience.
+These themes are notably absent or negatively framed in reviews of Disneyland Paris — especially regarding staff and time efficiency — reinforcing our earlier findings.
 
 ## Part 3: Locations analysis
 
@@ -763,21 +764,25 @@ monthly_reviews <- reviews %>%
   filter(!is.na(month) & !is.na(year)) %>%
   count(year, month, Branch)
 
-# Sort month correctly as a factor
+# Sort month correctly
 monthly_reviews$month <- factor(monthly_reviews$month, 
                                  levels = month.abb, 
                                  ordered = TRUE)
 
-# Line plot
+# Line plot with facets stacked in 3 rows
 ggplot(monthly_reviews, aes(x = month, y = n, color = as.factor(year), group = year)) +
-  geom_line() +
-  facet_wrap(~ Branch, scales = "free_y") +
+  geom_line(size = 1.2) +
+  facet_wrap(~ Branch, ncol = 1) +
   labs(
     title = "Monthly Review Trends per Year and Branch",
     x = "Month", y = "Number of Reviews", color = "Year"
   ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9))
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+    strip.text = element_text(size = 12, face = "bold")
+  )
+
 
 
 ```
@@ -802,15 +807,15 @@ Disneyland California:
 
 Disneyland Hong Kong:
 
--   Reviews peaked in spring and early summer (April–July), with fewer December spikes compared to other locations.
+-   Reviews peaked in spring and early summer (April–July) and in December.
 
 -   Fluctuations are more moderate, and volumes are lower than California, but follow a similar summer-dominated pattern.
 
--   Notable review growth in 2014 and 2015, then slight decline afterward.
+-   Notable review growth in 2016, then slight decline afterward.
 
 Disneyland Paris:
 
--   Seasonal trends are very pronounced, with major spikes in July and August each year.
+-   Seasonal trends, with major spikes in July and August each year.
 
 -   This suggests a strong reliance on European summer tourism, particularly school holiday travelers.
 
@@ -824,17 +829,17 @@ Why These Peaks Happen
 
 -   April and October spikes (in some years): Often coincide with spring breaks and Halloween events, especially in California and Hong Kong.
 
-Conclusion
+
 
 This analysis shows that while all parks follow seasonal review trends, they vary in intensity and consistency:
 
 -   California leads in volume and exhibits both summer and winter peaks.
 
--   Paris is highly summer-dependent, with less consistent winter activity.
+-   Paris is highly summer-dependent, with less consistent winter activity,but positive reviews from California showed us that people really like chrismas events in Disneyland California.
 
--   Hong Kong has more muted fluctuations, possibly due to regional travel behavior or review habits.
+-   Hong Kong has a bit of a different seasonality with more people around spring but also winter, and that more than Paris.
 
-This temporal context is essential when interpreting sentiment and content — a surge in reviews may coincide with both excitement and operational stress, impacting the tone and topics of the reviews.
+
 
 ### Average Rating Trends Over Time by Location
 
@@ -856,41 +861,26 @@ reviews %>%
 
 Key Insights:
 
-Disneyland California (Red):
+🟥 Disneyland California (Red)
+Starts off with the highest average rating (~4.5) in 2010.
 
--   Maintains the highest average rating overall across the decade.
+Gradual decline from 2011 to 2018, with a small rebound in 2019.
 
--   While the average rating shows a slight decline after 2015, it remains relatively stable and high, suggesting consistent visitor satisfaction.
+Despite the drop, it remains the top-rated park throughout most of the period.
 
--   The drop around 2016–2018 may reflect increased expectations or operational challenges, but sentiment rebounded in 2019.
+🟩 Disneyland Hong Kong (Green)
+Begins lower than California but shows a sharp increase from 2010 to 2011.
 
-Disneyland Hong Kong (Green):
+Ratings stabilize between 4.2–4.3 from 2013 onward.
 
--   Shows a sharp increase in ratings from 2010 to 2013, stabilizing around 4.2–4.3.
+Slight decline after 2018, but it overtakes California in 2018 for the first time.
 
--   Slight decline begins post-2017, possibly due to crowding, maintenance, or local events.
+🟦 Disneyland Paris (Blue)
+Starts with the lowest ratings, around 3.8 in 2010.
 
--   Despite this, Hong Kong holds a mid-position, generally outperforming Paris but not quite reaching California’s consistency.
+Shows slow but steady growth until 2016, peaking near 4.1.
 
-Disneyland Paris (Blue):
-
--   Shows lower average ratings throughout the period.
-
--   Brief improvement between 2012 and 2016, peaking just above 4.1.
-
--   From 2016 onward, ratings consistently decline, dropping below 3.8 by 2019 — a clear sign of growing visitor dissatisfaction.
-
-Interpretation in Context
-
-This long-term trend helps explain earlier findings:
-
--   California's higher local visitor ratio likely contributes to steadier, more forgiving feedback.
-
--   Paris relies heavily on tourists, whose higher expectations and more sensitive experiences may amplify negative feedback over time.
-
--   External factors like renovations, staff shortages, or seasonal overcrowding could explain sudden drops (especially Paris in 2017–2019).
-
-This time-based analysis confirms that Disneyland California not only receives more positive reviews overall, but sustains high satisfaction consistently over the years. Meanwhile, Disneyland Paris faces growing dissatisfaction, making it a clear candidate for operational review and experience improvement.
+From 2017 onward, there’s a significant drop, reaching the lowest point (~3.7) by 2019.
 
 ### Sentiment Trend Over the Years by Branch
 
@@ -925,7 +915,7 @@ Positive sentiment remains consistently strong throughout the decade, hovering a
 Positive sentiment seems to go down from 2017-2018 and in contrast neutral sentiment goes up. There's a dramatic spike in neutral sentiment in 2019, suggesting a possible lower satisfaction in guest experience or operations. Negative sentiment remains relatively low and stable after a sharp drop in 2011.
 
 **Disneyland Paris**\
-Contrary to the average trend, positive sentiment alone **increased** after 2013 and remained stable or even slightly rising through 2018 although the number of reviews overall has also decreased overtime. Neutral sentiment steadily decreased, while negative sentiment rose modestly over time — but did not surpass positive sentiment. This indicates a **more mixed sentiment trend**, rather than a clear decline but as we can see, the lines are very close to each other in comparison to California and Hong Kong, so the ratios are very similar and the drop of neutral reviews in combination with the rise of negative ones, resulted in an average down going trend .
+Contrary to the average trend, positive sentiment alone **increased** after 2013 and remained stable or even slightly rising through 2018 although the number of reviews overall has also decreased overtime. Neutral sentiment steadily decreased, while negative sentiment rose modestly over time — but did not surpass positive sentiment. This indicates a **more mixed sentiment trend**, rather than a clear decline but as we can see, the lines are very close to each other in comparison to California and Hong Kong, so the ratios are very similar and the drop of neutral reviews in combination with the rise of negative ones, resulted in an average down going trend.
 
 ### Visitor Composition by Disneyland Branch
 
@@ -1031,14 +1021,10 @@ Over the course of this analysis, we explored review data from Disneyland Califo
 
 One of the most consistent findings is that Disneyland California performs best in terms of sentiment and average ratings. This park not only receives the most reviews but also sustains a high level of visitor satisfaction over time. A key contributing factor appears to be its balanced visitor base — around 36% of reviews come from locals. These local visitors tend to be more familiar with the park, more forgiving of minor inconveniences, and often more emotionally attached to the Disneyland brand. Their reviews are more positive on average and contribute to a generally stable reputation.
 
-In contrast, Disneyland Paris receives the lowest ratings and most negative sentiment, with a clear downward trend over the last decade. This park is reviewed almost exclusively by tourists (99%), many of whom are first-time visitors with high expectations. When these expectations are not met — due to long queues, unclean facilities, or staff-related frustrations — tourists are more likely to leave critical reviews. Topic modeling of negative reviews from Paris revealed common issues such as long wait times, unclean toilets, staff rudeness, lack of shows, and a perceived lack of value for money.
+In contrast, Disneyland Paris receives the lowest ratings and most negative sentiment, with a clear downward trend over the last decade. This park is reviewed almost exclusively by tourists (99%). Our sentiment analysis showed that local people give even more negative reviews than tourists, which shows why there aren't many of them. On the other hand, many of whom are first-time visitors with high expectations. When these expectations are not met — due to long queues, unclean facilities, or staff-related frustrations — tourists are also more likely to leave critical reviews. Topic modeling of negative reviews from Paris revealed common issues such as long wait times, unclean toilets, staff rudeness, lack of shows, and a perceived lack of value for money.
 
 From this analysis, it's evident that Disneyland Paris has a significant opportunity to improve the guest experience by directly addressing the topics most associated with negative feedback. Management could consider expanding queue management systems, such as virtual lines or FastPass-like features, to alleviate frustration related to long waits. Moreover, enhancing the entertainment offering — including more frequent fireworks, parades, and seasonal shows — could create the type of magical experiences that guests consistently praise in California.
 
-In addition to operational improvements, Paris would benefit from investing in staff training programs that emphasize friendliness, multilingual support, and responsiveness. Many tourists may already be navigating cultural and logistical challenges; a warm, welcoming atmosphere can greatly shape their overall perception. Furthermore, the frequent appearance of complaints about unclean toilets and public areas suggests that improving cleanliness standards is not just a hygiene issue, but also a reputational one.
-
-Beyond immediate actions, there are ways to integrate review analysis into ongoing park management. For example, sentiment trends could be monitored through internal dashboards, providing real-time feedback on visitor satisfaction. Parks could also adopt automated alerts that flag emerging negative topics before they become widespread issues. Review data could even be used in staff performance feedback, training design, or in prioritizing maintenance and refurbishment schedules.
-
-There is also potential to develop data products that support operational decisions. A “visitor sentiment score,” updated weekly by location or attraction, could become a standard metric used in executive reports. Topic heatmaps showing where certain types of complaints cluster spatially within a park could help inform layout changes or staff deployment. These kinds of tools would make sentiment analysis not just a post-hoc reflection tool but an integral part of the guest experience feedback loop.
+In addition we saw, that the number of reviews significantly decreased for all branches, which makes the information retrival more difficult and less trustworthy if most of them are old. To continuously improve Disneyland's customer experience, it is important to have updated data and therefore we would encourage Disneyland to gather more reviews and analyse them every year. Since we had difficulty finding a suitable sentiment classifier, we would also suggest them to fine tune a model for their reviews to perfectly classify and analyse them.
 
 In conclusion, visitor reviews are an incredibly rich and underutilized source of insight. They capture authentic guest perspectives at scale and can guide both strategic and tactical improvements. Disneyland California shows what consistent, positive experiences can yield, while Disneyland Paris shows where missed expectations can erode public sentiment over time. By responding directly to review data — especially in Paris — Disney can protect its brand reputation and continue delivering magical experiences that live up to the promise of its parks.
