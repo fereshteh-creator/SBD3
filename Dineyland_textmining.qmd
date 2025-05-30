@@ -269,7 +269,7 @@ reviews_clean <- reviews_clean %>%
 
 To solve this problem we mainly use NLPs that are capable of context understanding.
 
-## Part 1: Content analysis and topic modeling
+## Part 1: Overview
 
 🔷 What can we tell about the customers that write reviews?
 
@@ -478,6 +478,9 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 -   Locals are mostly neutral here.
 
+
+
+## Part 3: Content analysis
 To better understand the content of negative feedback at Disneyland Paris, we generated a word cloud from the most frequently used words in negative sentiment reviews. Common branding terms like “Disneyland,” “Disney,” “park,” and “day” were removed to focus on specific experiences.
 
 ```{r}
@@ -746,7 +749,7 @@ This breakdown confirms that Disneyland California’s positive reviews are rich
 
 These themes are notably absent or negatively framed in reviews of Disneyland Paris — especially regarding staff and time efficiency — reinforcing our earlier findings.
 
-## Part 3: Locations analysis
+## Part 4: Locations analysis
 
 🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
 
@@ -1013,7 +1016,7 @@ The visitor composition is a powerful predictor of review tone. Parks with more 
 
 This makes visitor type a critical consideration for interpreting sentiment, planning service improvements, and targeting future marketing strategies.
 
-## Part 4: Conclusion and Discussion
+## Part 5: Conclusion and Discussion
 
 🔷 What specific advice can we give to the Park management based on our analysis? How can we integrate the analysis of reviews in internal processes, can we think of any data products that would be of value?
 
