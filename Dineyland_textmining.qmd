@@ -266,7 +266,7 @@ reviews_clean <- reviews_clean %>%
 
 To solve this problem we mainly use NLPs that are capable of context understanding.
 
-## Part 1: Overview
+## Part 1: Overview and problem identification
 
 🔷 What can we tell about the customers that write reviews?
 
