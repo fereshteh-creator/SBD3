@@ -100,9 +100,6 @@ This dataset contains user-generated reviews for Disneyland parks in Hong Kong, 
 
 -   Branch: For which branch the review was written.
 
-
-
-
 ```{r}
 load('Disneyland.rda')
 head(reviews, 1)
@@ -273,7 +270,6 @@ To solve this problem we mainly use NLPs that are capable of context understandi
 
 🔷 What can we tell about the customers that write reviews?
 
-
 If we have a look at the average ratings of the reviews we notice that Disneyland Paris has the lowest average rating:
 
 ```{r}
@@ -283,8 +279,6 @@ reviews %>%
 ```
 
 To understand the evolution of customer engagement over time, we visualized the number of reviews submitted each year across the three Disneyland branches: California, Hong Kong, and Paris.
-
-
 
 ```{r}
 
@@ -312,7 +306,6 @@ The bar chart shows review counts by year and park:
 
 *What this Chart also shows us is that although Paris has the lowest ratings, it doesn't have the smallest number of visitors who left a review. Up unitl 2019 it still had more visitors than Hong Kong, which shows that this branch is important and the visitors who left a review, had something to say and that they, expect improvements.*
 
-
 To see who is writing the reviews, we categorized reviewers based on their location relative to each park:
 
 -   Local: The reviewer is from the same country as the park.
@@ -320,7 +313,6 @@ To see who is writing the reviews, we categorized reviewers based on their locat
 -   Tourist: The reviewer is from a different country.
 
 We matched each park with its corresponding country and compared it to the reviewer’s location to assign a Visitor_Type. The summary table shows the distribution of local and tourist reviewers for each Disneyland branch:
-
 
 ```{r}
 branch_country <- tibble::tibble(
@@ -340,6 +332,49 @@ reviews_tagged %>%
          Tourist_Ratio = Tourist / Total)
 
 ```
+
+```{r}
+# Branch-country mapping
+branch_country <- tibble::tibble(
+  Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
+  Country = c("United States", "France", "Hong Kong")
+)
+
+# Join and classify visitor type
+reviews_tagged <- reviews_clean %>%
+  left_join(branch_country, by = "Branch") %>%
+  mutate(Visitor_Type = if_else(Reviewer_Location == Country, "Local", "Tourist"))
+
+# Summarize and reshape data
+summary_data <- reviews_tagged %>%
+  count(Branch, Visitor_Type) %>%
+  pivot_wider(names_from = Visitor_Type, values_from = n, values_fill = 0) %>%
+  mutate(
+    Total = Tourist + Local,
+    Tourist_Ratio = Tourist / Total
+  )
+
+# Reshape for plotting
+plot_data <- summary_data %>%
+  pivot_longer(cols = c("Local", "Tourist"), names_to = "Visitor_Type", values_to = "Count")
+
+# Plot
+ggplot(plot_data, aes(x = Branch, y = Count, fill = Visitor_Type)) +
+  geom_bar(stat = "identity") +
+  geom_text(
+    data = summary_data,
+    aes(x = Branch, y = Total + 10, label = scales::percent(Tourist_Ratio, accuracy = 1)),
+    inherit.aes = FALSE
+  ) +
+  labs(title = "Visitor Composition by Disneyland Branch",
+       y = "Number of Visitors",
+       x = "Branch") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Local" = "yellow", "Tourist" = "#FF7415")) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+
+```
+
 -   Disneyland Paris and Disneyland Hong Kong have overwhelmingly high proportions of tourist reviewers, with tourist ratios of 98.5% and 94.6%, respectively.
 
 -   Disneyland California, by contrast, has a significantly higher share of local reviewers, with a tourist ratio of 36.5%.
@@ -351,8 +386,6 @@ This suggests that:
 -   The California park with a strong local customer base likely due to its regional popularity and better experience, so that they tend to go back.
 
 Understanding the local-vs-tourist split is important for interpreting review content and tailoring park communication or services to different visitor types.
-
-
 
 ## Part 2: Sentiment analysis
 
@@ -370,7 +403,7 @@ Model: `cardiffnlp/twitter-xlm-roberta-base-sentiment` (via HuggingFace Transfor
     Each review was shortened to approximately 450 characters (\~512 tokens after tokenization) to meet model input constraints while retaining meaningful content.
 
 3.  Sentiment Classification:\
-    Using the HuggingFace Transformers pipeline, each review was passed through the `cardiffnlp/twitter-xlm-roberta-base-sentiment model`. This model was pre-trained on multilingual Twitter data and classifies text into one of three sentiment categories: positive, neutral, or negative. Although twitter data is not the same as review data, we mainly care about how people feel and since this is one of the best multilingual models, that were listed for sentiment analysis, but we need to be aware of biases that might potentially occur. 
+    Using the HuggingFace Transformers pipeline, each review was passed through the `cardiffnlp/twitter-xlm-roberta-base-sentiment model`. This model was pre-trained on multilingual Twitter data and classifies text into one of three sentiment categories: positive, neutral, or negative. Although twitter data is not the same as review data, we mainly care about how people feel and since this is one of the best multilingual models, that were listed for sentiment analysis, but we need to be aware of biases that might potentially occur.
 
 Labeling: The model’s sentiment predictions were retained as-is and used to classify the tone of each review:
 
@@ -381,7 +414,6 @@ Labeling: The model’s sentiment predictions were retained as-is and used to cl
 -   **positive → POSITIVE**
 
 This approach enabled sentiment classification with a focus on emotional tone and informal language, aligning well with the style and diversity of multilingual user reviews.
-
 
 ```{r}
 set.seed(1)
@@ -428,9 +460,6 @@ emo_results <- sampled_reviews %>%
 Sys.setenv(TOKENIZERS_PARALLELISM = "false")
  
 ```
-
-
-
 
 ### Sentiment by Visitor Type and Park Branch
 
@@ -482,9 +511,8 @@ ggplot(sentiment_normalized, aes(x = Visitor_Type, y = percent, fill = label)) +
 
 -   Locals are mostly neutral here.
 
-
-
 ## Part 3: Content analysis
+
 To better understand the content of negative feedback at Disneyland Paris, we generated a word cloud from the most frequently used words in negative sentiment reviews. Common branding terms like “Disneyland,” “Disney,” “park,” and “day” were removed to focus on specific experiences.
 
 ```{r}
@@ -619,7 +647,6 @@ topic_model$get_topic_info() %>%
    
 ```
 
-
 -   Long wait times, slow food service and closed attractions (time_food_closed_kids)
 
 -   Staff rudeness and smoking staff (smoking_people_smoke_staff)
@@ -653,7 +680,6 @@ topic_info_df %>%
 
 
 ```
-
 
 -   The most dominant issues revolve around time management, food service, and staff experience — these align strongly with earlier findings from the word cloud and sentiment classification.
 
@@ -755,8 +781,6 @@ These themes are notably absent or negatively framed in reviews of Disneyland Pa
 
 ## Part 4: Locations analysis
 
-🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
-
 To explore how visitor feedback varies over time, we analyzed monthly review counts for each Disneyland location from 2010 to 2019. The line chart bellow shows review volume by month, year, and branch (California, Hong Kong, and Paris).
 
 ```{r}
@@ -836,8 +860,6 @@ Why These Peaks Happen
 
 -   April and October spikes (in some years): Often coincide with spring breaks and Halloween events, especially in California and Hong Kong.
 
-
-
 This analysis shows that while all parks follow seasonal review trends, they vary in intensity and consistency:
 
 -   California leads in volume and exhibits both summer and winter peaks.
@@ -845,8 +867,6 @@ This analysis shows that while all parks follow seasonal review trends, they var
 -   Paris is highly summer-dependent, with less consistent winter activity,but positive reviews from California showed us that people really like chrismas events in Disneyland California.
 
 -   Hong Kong has a bit of a different seasonality with more people around spring but also winter, and that more than Paris.
-
-
 
 ### Average Rating Trends Over Time by Location
 
@@ -868,26 +888,23 @@ reviews %>%
 
 Key Insights:
 
-🟥 Disneyland California (Red)
-Starts off with the highest average rating (~4.5) in 2010.
+🟥 Disneyland California (Red) Starts off with the highest average rating (\~4.5) in 2010.
 
 Gradual decline from 2011 to 2018, with a small rebound in 2019.
 
 Despite the drop, it remains the top-rated park throughout most of the period.
 
-🟩 Disneyland Hong Kong (Green)
-Begins lower than California but shows a sharp increase from 2010 to 2011.
+🟩 Disneyland Hong Kong (Green) Begins lower than California but shows a sharp increase from 2010 to 2011.
 
 Ratings stabilize between 4.2–4.3 from 2013 onward.
 
 Slight decline after 2018, but it overtakes California in 2018 for the first time.
 
-🟦 Disneyland Paris (Blue)
-Starts with the lowest ratings, around 3.8 in 2010.
+🟦 Disneyland Paris (Blue) Starts with the lowest ratings, around 3.8 in 2010.
 
 Shows slow but steady growth until 2016, peaking near 4.1.
 
-From 2017 onward, there’s a significant drop, reaching the lowest point (~3.7) by 2019.
+From 2017 onward, there’s a significant drop, reaching the lowest point (\~3.7) by 2019.
 
 ### Sentiment Trend Over the Years by Branch
 
@@ -926,51 +943,8 @@ Contrary to the average trend, positive sentiment alone **increased** after 2013
 
 ### Visitor Composition by Disneyland Branch
 
-This chart shows the distribution of local vs. tourist reviewers across the three Disneyland locations, based on matching each reviewer’s stated location with the park's country.
-
-```{r}
-# Branch-country mapping
-branch_country <- tibble::tibble(
-  Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
-  Country = c("United States", "France", "Hong Kong")
-)
-
-# Join and classify visitor type
-reviews_tagged <- reviews_clean %>%
-  left_join(branch_country, by = "Branch") %>%
-  mutate(Visitor_Type = if_else(Reviewer_Location == Country, "Local", "Tourist"))
-
-# Summarize and reshape data
-summary_data <- reviews_tagged %>%
-  count(Branch, Visitor_Type) %>%
-  pivot_wider(names_from = Visitor_Type, values_from = n, values_fill = 0) %>%
-  mutate(
-    Total = Tourist + Local,
-    Tourist_Ratio = Tourist / Total
-  )
-
-# Reshape for plotting
-plot_data <- summary_data %>%
-  pivot_longer(cols = c("Local", "Tourist"), names_to = "Visitor_Type", values_to = "Count")
-
-# Plot
-ggplot(plot_data, aes(x = Branch, y = Count, fill = Visitor_Type)) +
-  geom_bar(stat = "identity") +
-  geom_text(
-    data = summary_data,
-    aes(x = Branch, y = Total + 10, label = scales::percent(Tourist_Ratio, accuracy = 1)),
-    inherit.aes = FALSE
-  ) +
-  labs(title = "Visitor Composition by Disneyland Branch",
-       y = "Number of Visitors",
-       x = "Branch") +
-  theme_minimal() +
-  scale_fill_manual(values = c("Local" = "yellow", "Tourist" = "#FF7415")) +
-  theme(axis.text.x = element_text(angle = 20, hjust = 1))
-
-```
-
-Key Findings:
+In Chapter 1, you see a visualization of the local and tourist review distribution (yellow and orange stacked bar chart), which reveals several key findings:\
+Where we can see: Key Findings:
 
 -   Disneyland California has the most balanced audience:
 
@@ -980,19 +954,15 @@ Key Findings:
 
 -   Disneyland Hong Kong:
 
-```         
--    \~95% tourists, just 5% local reviews.
+    -   \~95% tourists, just 5% local reviews.
 
--   Still, Hong Kong performs relatively well in ratings and sentiment.
-```
+    -   Still, Hong Kong performs relatively well in ratings and sentiment.
+
+<!-- -->
 
 -   Disneyland Paris:
-
-```         
--    Overwhelmingly tourist-driven, with 99% of reviews from international visitors.
-
--   This aligns with its consistently lower sentiment and rating performance.
-```
+    -   Overwhelmingly tourist-driven, with 99% of reviews from international visitors
+    -   This aligns with its consistently lower sentiment and rating performance.
 
 Why This Matters
 
@@ -1021,8 +991,6 @@ The visitor composition is a powerful predictor of review tone. Parks with more 
 This makes visitor type a critical consideration for interpreting sentiment, planning service improvements, and targeting future marketing strategies.
 
 ## Part 5: Conclusion and Discussion
-
-🔷 What specific advice can we give to the Park management based on our analysis? How can we integrate the analysis of reviews in internal processes, can we think of any data products that would be of value?
 
 Over the course of this analysis, we explored review data from Disneyland California, Paris, and Hong Kong to understand how visitor experiences differ by location, time, and reviewer type. By examining ratings, sentiment trends, thematic topics, and the composition of reviewers, we uncovered actionable insights that can support more informed decision-making and experience design across the parks.
 
