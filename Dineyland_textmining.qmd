@@ -781,6 +781,8 @@ These themes are notably absent or negatively framed in reviews of Disneyland Pa
 
 ## Part 4: Locations analysis
 
+🔷 What differences can we detect for the three different locations and are there any interesting trends over time?
+
 To explore how visitor feedback varies over time, we analyzed monthly review counts for each Disneyland location from 2010 to 2019. The line chart bellow shows review volume by month, year, and branch (California, Hong Kong, and Paris).
 
 ```{r}
@@ -991,6 +993,8 @@ The visitor composition is a powerful predictor of review tone. Parks with more 
 This makes visitor type a critical consideration for interpreting sentiment, planning service improvements, and targeting future marketing strategies.
 
 ## Part 5: Conclusion and Discussion
+
+🔷 What specific advice can we give to the Park management based on our analysis? How can we integrate the analysis of reviews in internal processes, can we think of any data products that would be of value?
 
 Over the course of this analysis, we explored review data from Disneyland California, Paris, and Hong Kong to understand how visitor experiences differ by location, time, and reviewer type. By examining ratings, sentiment trends, thematic topics, and the composition of reviewers, we uncovered actionable insights that can support more informed decision-making and experience design across the parks.
 
