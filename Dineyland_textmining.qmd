@@ -334,6 +334,8 @@ reviews_tagged %>%
 ```
 
 ```{r}
+#| echo: false
+
 # Branch-country mapping
 branch_country <- tibble::tibble(
   Branch = c("Disneyland_California", "Disneyland_Paris", "Disneyland_HongKong"),
@@ -576,7 +578,7 @@ To go beyond individual words and uncover deeper patterns in the complaints, we 
 
 -   Data: 1,000 randomly sampled negative sentiment reviews from Disneyland Paris
 
--   Number of topics: Up to 6 (auto-reduced to 2 dominant topics based on content)
+-   Number of topics: Up to 6
 
 ```{r}
 
@@ -686,10 +688,6 @@ topic_info_df %>%
 -   Many complaints are operational and solvable, such as managing ride closures, cleanliness, and crowd flow.
 
 -   The recurring mention of staff across several topics suggests a need for staff training or service consistency, especially for a tourist-heavy audience.
-
-This topic breakdown helps explain why Disneyland Paris receives significantly more negative reviews than Disneyland California, especially from tourists:
-
-Tourists are less forgiving of inefficiencies and tend to have higher expectations — particularly when traveling internationally. With Paris relying almost entirely on tourist reviewers, these operational issues are amplified in the review data.
 
 This insight can guide targeted service improvements to raise satisfaction and reputation among future visitors.
 
