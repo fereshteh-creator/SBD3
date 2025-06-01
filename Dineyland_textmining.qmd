@@ -649,19 +649,34 @@ topic_model$get_topic_info() %>%
    
 ```
 
--   Long wait times, slow food service and closed attractions (time_food_closed_kids)
+Now that we have actual clusters of topics using BERTopic, the interpretation becomes more structured and insightful — because it groups entire reviews based on shared meanings, not just word frequency.
 
--   Staff rudeness and smoking staff (smoking_people_smoke_staff)
+🔹 Topic 0: Delays, Closures, and Family Frustration
+This dominant topic combines complaints about long wait times, closed attractions, and disappointing food service — often with direct impact on families with children. These reviews describe experiences where families waited hours for rides or food, only to find attractions closed or service too slow to manage with kids.
 
--   Smoking-related concerns and enforcement (smoking_people_smoke_staff)
+🔹 Topic 1: Smoking in the Park
+This topic captures growing concerns about smoking policies. Guests complain about smokers in crowded areas, and some even note staff members smoking, which breaks immersion and creates discomfort.
 
--   Toilet cleanliness and hygiene (toilets_disgusting_toilet_euro)
+🔹 Topic 2: Timing Issues Around Fireworks and Food
+Some visitors mention fireworks that were, rescheduled, or poorly timed with restaurant hours — causing logistical stress, especially in the evening.
 
-A substantial number of reviews were labeled with Topic -1, which is actually very similar to topic 0, indicating that many of the negative reviews were because of food long queues, staff and closed attractions.
+🔹 Topic 3: Rude Staff and Cultural Tension
+This cluster is centered on reviews that mention rude or unhelpful staff, sometimes with a cultural tone — for example, calling out French staff or comparing with experiences in other parks.
+
+🔹 Topic 4: Disappointment Compared to Florida
+A niche but emotionally strong topic: visitors comparing Paris unfavorably to Disney Florida, saying it lacked the same magic, hospitality, or smooth operations.
+
+🔹 Topic 5: Sanitation and Toilets
+Guests voice frustration about dirty or smelly toilets, especially when tied to the high cost of entry — making them feel that basic standards weren't met.
+
+And What About Topic -1?
+A large number of reviews fall into Topic -1, which BERTopic couldn't cluster clearly — but when we look at the most frequent words, they echo the same core complaints as Topic 0: queues, food, and staff issues. These reviews likely express similar frustration but in less consistent or more emotional language.
+
+
 
 ### Frequency of Topics in Negative Disneyland Paris Reviews
 
-Using **BERTopic**, we extracted and categorized common themes in 1,000 negative reviews of **Disneyland Paris**. The chart bellow shows the frequency of each topic, based on semantic clustering of similar reviews.
+Using **BERTopic**, we extracted and categorized common themes and removed topic -1. The chart bellow visualizes the frequency of each topic, based on semantic clustering of similar reviews.
 
 ```{r}
 
@@ -683,17 +698,10 @@ topic_info_df %>%
 
 ```
 
--   The most dominant issues revolve around time management, food service, and staff experience — these align strongly with earlier findings from the word cloud and sentiment classification.
-
--   Many complaints are operational and solvable, such as managing ride closures, cleanliness, and crowd flow.
-
--   The recurring mention of staff across several topics suggests a need for staff training or service consistency, especially for a tourist-heavy audience.
-
-This insight can guide targeted service improvements to raise satisfaction and reputation among future visitors.
 
 ### Visualizing Topic Clusters with UMAP
 
-To visulaize the clusters, we applied UMAP (Uniform Manifold Approximation and Projection) to reduce the high-dimensional text embeddings into two dimensions. Each point represents a single review, and colors indicate the topic assigned by the BERTopic model.
+To see the distribution of clusters, we applied UMAP (Uniform Manifold Approximation and Projection) to reduce the high-dimensional text embedding into two dimensions. Each point represents a single review, and colors indicate the topic assigned by the BERTopic model.
 
 ```{r}
 
@@ -727,7 +735,7 @@ Smaller, more tightly defined clusters captured specific concerns, such as clean
 
 ### Topic Modeling of Positive Reviews – Disneyland California
 
-To help Disneyland in Paris to improve even more lets look at the reasons behind very positive reviews of California
+To help Disneyland in Paris improve even more lets look at the reasons behind very positive reviews of California
 
 ```{r}
 
