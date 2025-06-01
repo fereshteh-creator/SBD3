@@ -729,9 +729,9 @@ ggplotly(
 
 #### Key Observations:
 
-The largest cluster encompassed a wide range of general complaints, with common themes involving wait times, food availability, and attraction closures — particularly affecting families with children. This dominant topic reflects the broad operational frustrations most frequently expressed by guests.
+The biggest cluster shows a mix of general complaints, mostly about long waiting times, food problems, and closed attractions. These issues especially affected families with kids, and they were the most common reason for negative reviews.
 
-Smaller, more tightly defined clusters captured specific concerns, such as cleanliness issues, smoking enforcement, and staff interactions. Several reviews referenced unmet expectations when compared to other Disney parks, suggesting that the perceived quality of service in Paris may fall short of what guests anticipate based on international standards.
+We also see that some clusters are close to each other or overlap, which means that different complaints might be connected. For example, when people talk about rude staff, they often also mention cleanliness. This shows us the underlying staff management issue.
 
 ### Topic Modeling of Positive Reviews – Disneyland California
 
@@ -810,7 +810,7 @@ monthly_reviews$month <- factor(monthly_reviews$month,
 
 # Line plot with facets stacked in 3 rows
 ggplot(monthly_reviews, aes(x = month, y = n, color = as.factor(year), group = year)) +
-  geom_line(size = 1.2) +
+  geom_line(linewidth = 1.2) +
   facet_wrap(~ Branch, ncol = 1) +
   labs(
     title = "Monthly Review Trends per Year and Branch",
@@ -976,15 +976,11 @@ Why This Matters
 
 Local visitors are often:
 
--   More familiar with the park experience
+-   More familiar with the park experience so if its really good, they would come repeatedly and increase the local ratio.
 
--   Less critical of occasional shortcomings
-
--   More likely to visit repeatedly, reducing the pressure for a “perfect” experience
 
 Tourists, on the other hand:
 
--   May face language or cultural barriers
 
 -   Are often first-time visitors with high expectations
 
